@@ -255,110 +255,32 @@ Adapters (HTTP pagination, auth, dedup, provider-specific quirks) live as small 
 ```json
 {
   "id": "trc_01HV3K9YJZ7",
-  "schema_version": "1.0",
 
-  "provenance": {
-    "provider": "langfuse",
-    "external_id": "abc123-langfuse-trace-id",
-    "ingested_at": "2026-04-26T10:14:33Z",
-    "raw_ref": ".whetstone/raw/langfuse/abc123.json"
-  },
-
-  "agent": {
-    "name": "support-bot",
-    "version": "2026.04.18-a1f2c3",
-    "environment": "production"
-  },
-
-  "session": {
-    "session_id": "sess_88af",
-    "user_id_hash": "u_2f9e…",
-    "turn_index": 4,
-    "started_at": "2026-04-26T09:58:11Z",
-    "ended_at":   "2026-04-26T10:01:42Z"
-  },
-
-  "input": {
-    "user_message": "I want a refund for order #4421, it never arrived",
-    "system_prompt_ref": "prompts/support-bot/v18.md",
-    "context": {
-      "locale": "en-GB",
-      "channel": "web",
-      "attachments": []
-    }
-  },
-
-  "output": {
-    "assistant_message": "I've processed a refund of £42.00 to your card …",
-    "stop_reason": "end_turn",
-    "latency_ms": 4821,
-    "tokens": { "input": 1284, "output": 312 }
-  },
-
-  "messages": [
-    { "role": "system", "content": "..." },
-    { "role": "user",   "content": "..." },
-    { "role": "assistant", "content": "...", "tool_calls": [ /* … */ ] },
-    { "role": "tool", "tool_call_id": "tc_1", "content": "..." }
-  ],
-
-  "tool_calls": [
-    {
-      "id": "tc_1",
-      "name": "lookup_order",
-      "arguments": { "order_id": "4421" },
-      "result_summary": "order found, status=in_transit",
-      "latency_ms": 211,
-      "error": null
-    }
-  ],
+  "input":  "I want a refund for order #4421, it never arrived",
+  "output": "I've processed a refund of £42.00 to your card …",
 
   "feedback": [
     {
-      "id": "fb_1",
+      "sentiment": "negative",
       "source": "user",
-      "kind": "thumbs",
-      "value": "down",
-      "comment": "the bot said it processed a refund but it didn't",
-      "author": null,
-      "created_at": "2026-04-26T10:02:05Z"
+      "comment": "the bot said it processed a refund but it didn't"
     },
     {
-      "id": "fb_2",
-      "source": "implicit",
-      "kind": "behavioural",
-      "value": "regenerated",
-      "derivation": {
-        "rule": "user_regenerated_within_30s",
-        "extractor": "extractors/regenerated.ts"
-      },
-      "created_at": "2026-04-26T10:02:14Z"
-    },
-    {
-      "id": "fb_3",
+      "sentiment": "negative",
       "source": "sme",
-      "kind": "annotation",
-      "value": "fail",
-      "rubric": {
-        "factuality": "fail",
-        "safety": "pass",
-        "tone": "pass",
-        "tool_use": "fail"
-      },
-      "comment": "claimed a refund was processed without calling issue_refund tool",
-      "author": "sme:lucia@example.com",
-      "created_at": "2026-04-27T08:30:00Z"
+      "comment": "claimed a refund was processed without calling issue_refund tool"
     }
   ],
 
-  "labels": ["billing", "refund-flow"],
+  "originalTrace": {
+    "_comment": "verbatim provider payload — shape is provider-specific. The coding agent reads it on demand for full transcript, tool calls, timing, prompts, etc."
+  },
 
-  "failure_mode_ids": ["fm_2026_04_hallucinated_action"],
+  "failureModeIds": ["fm_2026_04_hallucinated_action"],
 
   "analysis": {
     "status": "analyzed",
-    "batch_id": "batch_2026_04_26_001",
-    "analyzed_at": "2026-04-27T09:11:02Z",
+    "analyzedAt": "2026-04-27T09:11:02Z",
     "notes": "matched existing FM by tool-omission pattern"
   }
 }
@@ -366,179 +288,47 @@ Adapters (HTTP pagination, auth, dedup, provider-specific quirks) live as small 
 
 **Notes on the shape:**
 
-- `feedback[]` is the **single channel** for all signals. SME vs user vs implicit is just a `source` enum. This was the user's explicit requirement.
-- `feedback[].kind` is open-ended (`thumbs`, `rating`, `comment`, `annotation`, `behavioural`) — adapters can extend it without breaking the schema.
+- `input` and `output` are natural-language strings — the headline signals. They keep the catalogue and skill prompts compact.
+- `originalTrace` is the **verbatim provider payload** (any JSON shape). When a skill needs the full transcript, tool calls, prompts, latency, etc., it reads from here. Keeping it as opaque `unknown` means Whetstone doesn't care about provider-specific differences — adapters don't have to lossily flatten anything.
+- `feedback[]` is the **single channel** for all signals. Each entry is `{ sentiment, source, comment }`, all three required:
+  - `sentiment ∈ { "positive", "negative" }`
+  - `source ∈ { "user", "sme", "other" }` — `"other"` covers implicit / behavioural / system-derived signals.
 - `analysis.status ∈ { "pending", "analyzed", "skipped", "error" }` lets the analyze skill know what's still in its queue without scanning the whole file.
-- `failure_mode_ids[]` is the back-reference. Empty until the analyze skill runs.
-- `messages[]` and `tool_calls[]` are the verbatim conversation — this is what the coding agent reads. They're separate from `input`/`output` (which are the headline signals) so the catalogue can ship pretty summaries without dragging the full transcript everywhere.
-- Personally identifying info should be hashed/redacted at the adapter boundary (`user_id_hash`, redacted message bodies) — see §11.
+- `failureModeIds[]` is the back-reference to the catalogue. Empty until the analyze skill runs.
+- Personally identifying info should be hashed/redacted at the adapter boundary, both inside `input`/`output` and inside `originalTrace` — see §11.
 
 ### 7.2 `FailureMode` (one entry per record in `failure_modes.json`)
 
 ```json
 {
-  "schema_version": "1.0",
-  "failure_modes": [
+  "failureModes": [
     {
       "id": "fm_2026_04_hallucinated_action",
       "title": "Agent claims to have called a tool that it never invoked",
       "description": "In refund and account-mutation flows the assistant verbally confirms a side-effect (refund issued, password reset, ticket closed) without an accompanying tool call. The transcript shows the assistant message but no matching tool_call entry.",
 
-      "status": "hardened",
+      "status": "investigating",
       "severity": "high",
       "tags": ["hallucination", "tool-use", "billing"],
 
-      "discovered_at": "2026-04-15T11:02:00Z",
-      "last_updated":  "2026-04-26T10:30:00Z",
+      "discoveredAt": "2026-04-15T11:02:00Z",
+      "lastUpdated":  "2026-04-26T10:30:00Z",
 
-      "evidence": {
-        "trace_count": 47,
-        "sample_trace_ids": ["trc_01HV3K9YJZ7", "trc_01HV41A2X3", "..."],
-        "first_seen": "2026-04-09T08:14:00Z",
-        "last_seen":  "2026-04-26T09:58:11Z",
-        "signal_breakdown": {
-          "user_thumbs_down": 31,
-          "user_comments": 12,
-          "implicit_regeneration": 22,
-          "sme_factuality_fail": 9
-        }
-      },
-
-      "hypotheses": [
-        {
-          "id": "h1",
-          "statement": "The system prompt allows the assistant to ‘confirm’ in natural language before tools have run, encouraging confabulation.",
-          "evidence_trace_ids": ["trc_01HV3K9YJZ7"],
-          "confidence": 0.7
-        },
-        {
-          "id": "h2",
-          "statement": "issue_refund tool occasionally times out and the agent fabricates success rather than reporting the failure.",
-          "evidence_trace_ids": ["trc_01HV41A2X3"],
-          "confidence": 0.4
-        }
-      ],
-
-      "fix_plan": {
-        "spec_path": "failure_modes/fm_2026_04_hallucinated_action/SPEC.md",
-        "plan_path": "failure_modes/fm_2026_04_hallucinated_action/PLAN.md",
-        "branch": "whetstone/fm_2026_04_hallucinated_action",
-        "pr_url": null,
-        "owner": "agent",
-        "summary": "Add a guard in the system prompt + a structural assertion that any user-visible confirmation of a side-effecting action must be preceded by a successful tool call of a matching name.",
-        "approved_by": "alfonso@example.com",
-        "approved_at": "2026-04-26T10:30:00Z"
-      },
-
-      "tests": [
-        {
-          "id": "t1",
-          "name": "refund hallucination scenario",
-          "kind": "scenario",
-          "command": "npm run agent:eval -- --scenario refund_hallucination",
-          "expects": { "exit_code": 0 },
-          "last_result": "fail",
-          "last_run_at": "2026-04-25T18:00:00Z"
-        },
-        {
-          "id": "t2",
-          "name": "replay of failing cohort",
-          "kind": "replay",
-          "command": "npm run agent:replay -- --trace-ids @failure_modes/fm_2026_04_hallucinated_action/cohort.txt",
-          "expects": { "max_failure_rate": 0.05 },
-          "last_result": null
-        }
-      ],
-
-      "metrics": {
-        "baseline_failure_rate": 0.18,
-        "current_failure_rate":  0.02,
-        "target_failure_rate":   0.05,
-        "cohort_size": 47,
-        "measured_at": "2026-04-27T11:00:00Z"
-      },
-
-      "regression_net": {
-        "status": "approved",
-        "approved_by": "alfonso@example.com",
-        "approved_at": "2026-04-27T13:10:00Z",
-        "pr_url": null,
-
-        "golden_dataset": {
-          "target_path": "evals/golden/refund_hallucination.jsonl",
-          "entries": [
-            {
-              "id": "g_2026_04_001",
-              "source_trace_id": "trc_01HV3K9YJZ7",
-              "rationale": "Canonical case: user requests refund, agent confirms in prose without ever calling issue_refund.",
-              "input": {
-                "user_message": "I want a refund for order #4421, it never arrived",
-                "context": { "locale": "en-GB", "channel": "web" }
-              },
-              "expected": {
-                "kind": "structural",
-                "assertions": [
-                  { "op": "tool_call_present", "name": "issue_refund" },
-                  { "op": "no_phrase_without_tool", "phrases": ["refund processed", "I have issued a refund", "your refund has been"], "required_tool": "issue_refund" }
-                ]
-              },
-              "tags": ["refund", "tool-omission"]
-            },
-            {
-              "id": "g_2026_04_002",
-              "source_trace_id": "trc_01HV41A2X3",
-              "rationale": "Edge case: issue_refund tool times out; agent must surface the failure rather than fabricate success.",
-              "input": {
-                "user_message": "Please refund my last order",
-                "fixtures": { "tools": { "issue_refund": { "behaviour": "timeout_after_ms", "value": 5000 } } }
-              },
-              "expected": {
-                "kind": "rubric",
-                "rubric": "The assistant must NOT claim the refund succeeded. It must either retry (≤ 1 time) or tell the user the refund could not be processed and offer a next step (escalate / try again later)."
-              },
-              "tags": ["refund", "tool-failure", "honesty"]
-            }
-          ]
-        },
-
-        "scorers": [
-          {
-            "id": "sc_tool_call_required_for_action_claim",
-            "kind": "deterministic",
-            "name": "Action claim requires matching tool call",
-            "change": "add",
-            "definition_path": "evals/scorers/tool_call_required.ts",
-            "spec": "FAIL if the assistant's final message contains a side-effecting confirmation phrase (configurable list per action) without a preceding successful tool_call whose `name` is in the action's allowed-tool list.",
-            "binding": { "datasets": ["evals/golden/refund_hallucination.jsonl"] },
-            "target": { "min_pass_rate": 1.0 }
-          },
-          {
-            "id": "sc_no_hallucinated_side_effects",
-            "kind": "llm_judge",
-            "name": "Assistant does not claim side-effects without tool calls",
-            "change": "add",
-            "definition_path": "evals/scorers/no_hallucinated_side_effects.judge.md",
-            "spec": "Given a transcript, FAIL if the assistant verbally confirms any side-effecting action (refund, password reset, ticket close, account deletion, …) without a corresponding successful tool_call. PASS otherwise. The judge prompt is in the definition file; rubric weights factuality and tool_use heavily.",
-            "rubric": ["factuality", "tool_use"],
-            "binding": { "datasets": ["evals/golden/refund_hallucination.jsonl"], "also_run_on": "all_traces_with_status_ok" },
-            "target": { "min_pass_rate": 0.95 }
-          }
-        ]
-      },
-
-      "history": [
-        { "ts": "2026-04-15T11:02:00Z", "event": "discovered", "actor": "skill:analyze-traces", "batch_id": "batch_2026_04_15_003" },
-        { "ts": "2026-04-20T14:00:00Z", "event": "evidence_grew", "delta": { "trace_count": 22 } },
-        { "ts": "2026-04-26T09:00:00Z", "event": "spec_drafted", "actor": "skill:fix-failure-mode" },
-        { "ts": "2026-04-26T10:30:00Z", "event": "spec_approved", "actor": "alfonso@example.com" },
-        { "ts": "2026-04-27T11:00:00Z", "event": "verified", "actor": "skill:fix-failure-mode", "metrics_delta": { "current_failure_rate": -0.16 } },
-        { "ts": "2026-04-27T12:30:00Z", "event": "regression_net_proposed", "actor": "skill:harden" },
-        { "ts": "2026-04-27T13:10:00Z", "event": "regression_net_approved", "actor": "alfonso@example.com" }
+      "affectedTraces": [
+        { "filename": "langfuse-2026-04-26.jsonl", "traceId": "trc_01HV3K9YJZ7" },
+        { "filename": "langfuse-2026-04-26.jsonl", "traceId": "trc_01HV41A2X3" },
+        { "filename": "langfuse-2026-04-27.jsonl", "traceId": "trc_01HV52B3Y4" }
       ]
     }
   ]
 }
 ```
+
+**Notes on the shape:**
+
+- A failure mode is intentionally minimal: an `id`, a human-readable `title` and `description`, lifecycle `status`, optional `severity` and `tags`, and the cohort it covers.
+- `affectedTraces` is the cohort. Each entry pairs a `filename` (a JSONL file under `traces/`) with a `traceId`. Skills load `traces/<filename>` and pluck the trace by id when they need the full record.
+- Hypotheses, fix plans, test bookkeeping, metrics, history, and regression-net artifacts are deliberately not in the schema for v1. The agent works from the linked traces + the working tree directly. (See §13 for what's been deferred.)
 
 **Status lifecycle:**
 
@@ -568,12 +358,9 @@ Both `verified` and `hardened` are valid terminal states. `wont_fix`, `duplicate
 **Key invariants** (enforced by `whetstone validate`, which skills run after every write to the catalogue or trace files):
 
 - No two failure modes share the same `id`.
-- Every `sample_trace_ids` entry exists in some file under `traces/` (lookup is `jq -c 'select(.id=="…")' traces/*.jsonl`). Trace IDs are globally unique across files.
-- Every trace listed under a failure mode references that failure mode in `failure_mode_ids[]` (bidirectional).
-- `evidence.trace_count` matches the number of traces actually pointing at this FM (not just samples).
-- `metrics.current_failure_rate` is only mutated by the verifier.
-- `regression_net.status` may only advance to `approved` after the failure mode reached `verified` at least once. You cannot harden a fix that never demonstrably worked.
-- `fix_plan.pr_url` and `regression_net.pr_url` are **user-populated**, not skill-populated. Skills never open PRs; if the user opens one and pastes the URL into the failure mode entry, that's the contract.
+- For every `affectedTraces[]` entry, the file `traces/<filename>` exists and contains a record with that `traceId` (lookup: `jq -c 'select(.id=="…")' traces/<filename>`).
+- Every trace listed under a failure mode references that failure mode in `failureModeIds[]` (bidirectional).
+- `affectedTraces` entries are unique per failure mode (no duplicate `(filename, traceId)` pairs).
 
 ---
 
@@ -696,7 +483,7 @@ Sorts open failure modes by impact (`evidence.trace_count × severity_weight × 
 
 - `traces/` — directory of NDJSON files, one per ingest run (or per user-curated batch). Each file is independently named (typically `<adapter>-<date>.jsonl`) and treated as immutable raw input by the ingest stage. Enrichment edits (adding `failure_mode_ids[]` or flipping `analysis.status`) rewrite the affected line in place inside whichever file holds the trace, under a lock file. Cross-file queries use `jq -c <filter> traces/*.jsonl`. Trace IDs are globally unique across files.
 - `failure_modes.json` — single JSON document, edited transactionally (write → fsync → rename). Versioned in git.
-- `schema_version` is on every record and every file. Migrations are scripts under `migrations/`.
+- No `schema_version` field in v1. The schema is small enough that breaking changes can be handled by a one-shot migration when (if) we need one. We'll add a version field the day we actually need to migrate.
 - All artifacts are intended to live in **the agent's own repo** (or a sister repo) so failure modes show up in PRs and code review.
 - **Use `jq` for all JSON manipulation.** Skills, adapter scripts, and any shell-level tool inside Whetstone must read, filter, slice, and transform files under `traces/` and `failure_modes.json` via `jq` (and `jq -c` for NDJSON streams). No `grep`/`sed`/`awk` against JSON, no hand-rolled parsers in shell. Reasons: (a) `jq` understands JSON structure, so filters can't be silently broken by reformatting or new fields, (b) NDJSON streams are first-class (`jq -c`), (c) failures surface as parse errors instead of garbage output. In-process code (TypeScript skills, adapters) uses native `JSON.parse`/`stringify`; the `jq` rule covers the boundary between shell and JSON.
 
