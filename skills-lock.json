@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "node-cli-script": {
+      "source": "alfonsograziano/node-skills",
+      "sourceType": "github",
+      "computedHash": "43e7fa94dbf23793b1d881851749e7835ff6193ece55bd1102739ea9c57f1445"
+    }
+  }
+}

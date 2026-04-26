@@ -1,0 +1,31 @@
+{
+  "name": "@whetstone/cli",
+  "version": "0.1.0",
+  "description": "Whetstone CLI: deterministic primitives for the Whetstone agent-improvement loop.",
+  "type": "module",
+  "bin": {
+    "whetstone": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "templates",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22.6.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && node scripts/postbuild.js",
+    "clean": "rm -rf dist",
+    "prepare": "npm run build",
+    "test": "node --test src/__tests__/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  }
+}
