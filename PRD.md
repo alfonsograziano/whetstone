@@ -206,8 +206,7 @@ whetstone/
 │   ├── harden.md                  # optional: golden + scorers proposer
 │   └── status.md                  # read-only catalogue summary
 └── .whetstone/
-    ├── cursors.json               # per-adapter ingest checkpoints
-    └── batches/                   # per-batch logs from the analyze skill
+    └── cursors.json               # per-adapter ingest checkpoints
 ```
 
 ### 6.1 Skills (LLM judgment work)
@@ -429,12 +428,12 @@ Skills are markdown files in `skills/` that the user invokes from their favorite
 
 **Behaviour:**
 
-1. Reads the chosen file from `traces/` (NDJSON; one trace per line).
+1. Reads the chosen file from `traces/` (JSONL; one trace per line).
 2. Filters to traces with at least one negative-leaning signal (configurable: any thumbs-down, any SME `fail`, any implicit signal in a denylist).
 3. For each trace: reads transcript + tool calls + feedback, classifies into existing FM(s) or proposes a new one.
 4. Bias toward reusing existing failure modes; merging similar ones; *only* split when the fix path would clearly differ.
 5. Updates the input file (rewriting affected lines in place to set `analysis.status` and `failure_mode_ids[]`) and `failure_modes.json` (write to temp → fsync → rename).
-6. Writes a per-batch log to `.whetstone/batches/<batch_id>.md` with reasoning — auditable, not a black box. The batch log records which file was analyzed.
+6. Runs `whetstone validate` after each batch's writes. On failure, reads the structured error report and self-corrects (the validator names the file, line, JSON path, and a hint for each issue), then re-validates. Loops until clean. Recovery from a bad write is the user's working tree under git — Whetstone does not snapshot.
 
 **Output contract:** every trace in the chosen file ends with `analysis.status ∈ { "analyzed", "skipped" }`. No partial states. Other files under `traces/` are untouched.
 
@@ -481,11 +480,11 @@ Sorts open failure modes by impact (`evidence.trace_count × severity_weight × 
 
 ## 10. Storage & versioning
 
-- `traces/` — directory of NDJSON files, one per ingest run (or per user-curated batch). Each file is independently named (typically `<adapter>-<date>.jsonl`) and treated as immutable raw input by the ingest stage. Enrichment edits (adding `failure_mode_ids[]` or flipping `analysis.status`) rewrite the affected line in place inside whichever file holds the trace, under a lock file. Cross-file queries use `jq -c <filter> traces/*.jsonl`. Trace IDs are globally unique across files.
+- `traces/` — directory of JSONL files, one per ingest run (or per user-curated batch). Each file is independently named (typically `<adapter>-<date>.jsonl`) and treated as immutable raw input by the ingest stage. Enrichment edits (adding `failure_mode_ids[]` or flipping `analysis.status`) rewrite the affected line in place inside whichever file holds the trace, under a lock file. Cross-file queries use `jq -c <filter> traces/*.jsonl`. Trace IDs are globally unique across files.
 - `failure_modes.json` — single JSON document, edited transactionally (write → fsync → rename). Versioned in git.
 - No `schema_version` field in v1. The schema is small enough that breaking changes can be handled by a one-shot migration when (if) we need one. We'll add a version field the day we actually need to migrate.
 - All artifacts are intended to live in **the agent's own repo** (or a sister repo) so failure modes show up in PRs and code review.
-- **Use `jq` for all JSON manipulation.** Skills, adapter scripts, and any shell-level tool inside Whetstone must read, filter, slice, and transform files under `traces/` and `failure_modes.json` via `jq` (and `jq -c` for NDJSON streams). No `grep`/`sed`/`awk` against JSON, no hand-rolled parsers in shell. Reasons: (a) `jq` understands JSON structure, so filters can't be silently broken by reformatting or new fields, (b) NDJSON streams are first-class (`jq -c`), (c) failures surface as parse errors instead of garbage output. In-process code (TypeScript skills, adapters) uses native `JSON.parse`/`stringify`; the `jq` rule covers the boundary between shell and JSON.
+- **Use `jq` for all JSON manipulation.** Skills, adapter scripts, and any shell-level tool inside Whetstone must read, filter, slice, and transform files under `traces/` and `failure_modes.json` via `jq` (and `jq -c` for JSONL streams). No `grep`/`sed`/`awk` against JSON, no hand-rolled parsers in shell. Reasons: (a) `jq` understands JSON structure, so filters can't be silently broken by reformatting or new fields, (b) JSONL streams are first-class (`jq -c`), (c) failures surface as parse errors instead of garbage output. In-process code (TypeScript skills, adapters) uses native `JSON.parse`/`stringify`; the `jq` rule covers the boundary between shell and JSON.
 
 ---
 
