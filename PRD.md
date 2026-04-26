@@ -125,7 +125,7 @@ flowchart TB
 
 ### 5.3 Cluster / failure-mode discovery
 
-- The `analyze-traces` skill (§9.1) takes **a single file under `traces/`** as its input and processes it in **batches of N** (default 20, configurable). One invocation = one file.
+- The `analyze-traces` skill (§9.2) takes **a single file under `traces/`** as its input and processes it in **batches of N** (default 20, configurable). One invocation = one file.
 - For each batch within the chosen file the skill:
   1. Reads the current `failure_modes.json`.
   2. Reads the next slice of unanalyzed traces from the file (those with `analysis.status = "pending"` and at least one negative or SME signal — configurable).
@@ -136,7 +136,7 @@ flowchart TB
 
 ### 5.4 Propose & implement fix
 
-- The `fix-failure-mode` skill (§9.2) takes one failure mode at a time.
+- The `fix-failure-mode` skill (§9.3) takes one failure mode at a time.
 - It reads: failure-mode entry, all linked traces, the agent's source code, and the project's Markdown config.
 - It writes a **spec file** (`failure_modes/<id>/SPEC.md`) describing the proposed fix in problem-space terms — *before* touching code.
 - On user approval, it implements the change in a feature branch, and runs the lint/typecheck/unit tests defined in the project.
@@ -153,7 +153,7 @@ This step is **opt-in**. It only runs after §5.5 has confirmed the fix actually
 
 Once a fix is `verified`, the bug is fixed *for now*. But nothing yet prevents it from coming back silently the next time someone edits the prompt or a tool. This step turns the lesson into a permanent fixture in the agent's eval suite.
 
-The `harden` skill (§9.3) takes the failure mode and proposes two artifacts:
+The `harden` skill (§9.4) takes the failure mode and proposes two artifacts:
 
 1. **Golden dataset entries** — one or more canonical input/expected-output pairs, distilled from the linked traces. The agent picks 1–N representative traces (favouring SME-annotated ones), constructs a clean input (PII redacted, irrelevant context stripped), and writes an `expected` clause. `expected` is one of:
    - `exact` — the assistant's final message must match a string / regex,
@@ -199,6 +199,7 @@ whetstone/
 │   ├── otel.ts
 │   └── ...
 ├── skills/                        # skills (markdown), portable across coding assistants
+│   ├── whetstone.md               # entry-point: orientation + interactive --help
 │   ├── ingest-traces.md           # wraps the adapter scripts
 │   ├── analyze-traces.md
 │   ├── fix-failure-mode.md
@@ -215,6 +216,7 @@ Each pipeline stage that requires reading transcripts, classifying, drafting, or
 
 | Stage | Skill | What it does |
 |---|---|---|
+| Entry | `whetstone` | Orientation + interactive `--help`. Detects whether the project is initialized (offers `whetstone init` if not), runs `whetstone validate` as a health check, then prints catalogue state, the workflow map, and the next likely step. Read-only after init. |
 | Ingest | `ingest-traces` | Calls the configured adapter script (e.g. `node adapters/langfuse.ts`) and writes a new JSONL file under `traces/`. |
 | Analyze | `analyze-traces` | Takes one file under `traces/` as input. Batches pending traces, classifies into failure modes, updates the input file and `failure_modes.json` via `jq`. Runs `whetstone validate` after every write. |
 | Fix | `fix-failure-mode` | Research → spec → plan → implement → verify, all in the working tree. |
@@ -352,7 +354,7 @@ stateDiagram-v2
     wont_fix --> [*]
 ```
 
-Both `verified` and `hardened` are valid terminal states. `wont_fix`, `duplicate_of:<id>`, and `closed` are also terminal. `hardening` and `hardened` are only reached if the user opts into the `harden` skill (§9.3).
+Both `verified` and `hardened` are valid terminal states. `wont_fix`, `duplicate_of:<id>`, and `closed` are also terminal. `hardening` and `hardened` are only reached if the user opts into the `harden` skill (§9.4).
 
 **Key invariants** (enforced by `whetstone validate`, which skills run after every write to the catalogue or trace files):
 
@@ -414,9 +416,43 @@ This file is the **only** place the user has to teach Whetstone project specific
 
 ## 9. Skills
 
-Skills are markdown files in `skills/` that the user invokes from their favorite coding assistant. Two are mandatory (`analyze-traces`, `fix-failure-mode`); `harden` is an optional end-of-loop skill. Skills do the LLM judgment work and shell out to `whetstone validate` (and other CLI primitives from §6.2) for deterministic checks. The skill format is intentionally portable (plain markdown + filesystem conventions) so it isn't bound to any single coding-assistant vendor.
+Skills are markdown files in `skills/` that the user invokes from their favorite coding assistant. `whetstone` is the entry skill — the one a new user (or returning user picking the project back up) runs first to orient themselves. Two are mandatory for the loop itself (`analyze-traces`, `fix-failure-mode`); `harden` is an optional end-of-loop skill. Skills do the LLM judgment work and shell out to `whetstone validate` (and other CLI primitives from §6.2) for deterministic checks. The skill format is intentionally portable (plain markdown + filesystem conventions) so it isn't bound to any single coding-assistant vendor.
 
-### 9.1 `analyze-traces`
+### 9.1 `whetstone` (entry skill)
+
+**Trigger:** the user invokes the skill from their favorite coding assistant with no other context — e.g. "run whetstone", "what can I do here?", or as the first command they run after cloning a repo. This is the orientation surface; it answers "where am I, what state is the project in, what should I do next?".
+
+**Inputs:**
+
+- The current working directory (it is bootstrap-aware — it does not require Whetstone to already be installed).
+- `whetstone.config.md` and `failure_modes.json` if they exist.
+
+**Behaviour:**
+
+1. **Detect project state.** Three branches:
+   - **No `whetstone/` directory.** Explain in one screen what Whetstone is, list what `whetstone init` would create (per §6.2), and ask the user whether to run it. Stop until they confirm. On confirmation, run `whetstone init`, then continue from step 2. On decline, exit cleanly.
+   - **Partially initialized** (`whetstone/` exists but `whetstone.config.md` or `failure_modes.json` is missing). Tell the user the project is partially set up and offer to run `whetstone init` (which is idempotent) to repair it. Do not try to hand-patch missing files.
+   - **Fully initialized.** Continue.
+2. **Health check.** Run `whetstone validate --json` and react:
+   - On pass: continue.
+   - On fail: print the structured issues and stop. Do not auto-fix — a broken catalogue is a "fix this before doing anything else" signal, and the analyze/fix skills already self-correct within their own scope. Surface the issues and let the user decide.
+3. **Orientation.** Print, in this order:
+   - **Catalogue snapshot.** Counts of failure modes by status, count of pending traces across files under `traces/`, and the most recently modified file under `traces/` (if any).
+   - **Workflow map.** A one-paragraph summary of the loop (§5), with the next likely step highlighted given the snapshot (e.g. "you have 3 pending traces in `langfuse-2026-04-26.jsonl` — consider running `analyze-traces`").
+   - **Available skills.** One line each for every skill in `skills/`, including `whetstone` itself. Mark mandatory vs optional.
+   - **Available CLI commands.** One line each for every command from §6.2, with the flag set most users care about.
+   - **Common next actions.** A short "if you want to do X, run Y" table grounded in the current state.
+4. **Stop.** Wait for the user to pick the next step. The skill never proactively invokes `analyze-traces`, `fix-failure-mode`, or any other skill — its job is orientation, not driving.
+
+**Output contract:**
+
+- Read-only after the optional `whetstone init` in step 1. The skill never edits trace files, `failure_modes.json`, code under `agent/`, or `evals/`.
+- Every invocation finishes with the user oriented: a clear "you are here, the catalogue is in state X, the next likely step is Y."
+- Honors the same hard rules from `whetstone.config.md` as every other skill (e.g. `jq` for any JSON inspection it does at the shell level).
+
+**Why a skill and not a CLI command:** the orientation step is mostly *interpretation* of state — picking the next likely action, summarising the catalogue in human terms, explaining the workflow in light of what's actually in this repo. That's LLM-judgment work, exactly the seam from §6 where skills live and the CLI doesn't. The CLI's `whetstone status` (§6.2) gives the same data in JSON for programmatic use; this skill is the human-facing front door that sits on top.
+
+### 9.2 `analyze-traces`
 
 **Trigger:** the user invokes the skill from their favorite coding assistant, specifying the file to analyze (e.g. "run analyze-traces on `traces/langfuse-2026-04-26.jsonl` with batch size 20").
 
@@ -437,7 +473,7 @@ Skills are markdown files in `skills/` that the user invokes from their favorite
 
 **Output contract:** every trace in the chosen file ends with `analysis.status ∈ { "analyzed", "skipped" }`. No partial states. Other files under `traces/` are untouched.
 
-### 9.2 `fix-failure-mode`
+### 9.3 `fix-failure-mode`
 
 **Trigger:** the user invokes the skill from their favorite coding assistant with a failure-mode id (e.g. "fix fm_2026_04_hallucinated_action").
 
@@ -453,7 +489,7 @@ Skills are markdown files in `skills/` that the user invokes from their favorite
 
 Each phase is a checkpoint — the user can stop, inspect, and resume.
 
-### 9.3 `harden` *(optional)*
+### 9.4 `harden` *(optional)*
 
 **Trigger:** the user invokes the skill from their favorite coding assistant with a failure-mode id. Refuses to run unless the failure mode is in `verified` state (you cannot harden a fix that hasn't been shown to work).
 
@@ -472,7 +508,7 @@ Each phase is a checkpoint — the user can stop, inspect, and resume.
 
 **Output contract:** on success, `regression_net.status == "approved"`, the failure mode is `hardened`, and the new scorers are bound to at least the originating failure mode's golden entries.
 
-### 9.4 (Optional, v1.1) `triage`
+### 9.5 (Optional, v1.1) `triage`
 
 Sorts open failure modes by impact (`evidence.trace_count × severity_weight × recency`) and proposes the next one to fix.
 
