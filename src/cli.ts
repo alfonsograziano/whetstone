@@ -2,6 +2,11 @@
 import { parseArgs, styleText } from "node:util";
 
 import { runInit } from "./commands/init.ts";
+import {
+  reportJson,
+  reportText,
+  runValidate,
+} from "./commands/validate.ts";
 
 const USAGE = `whetstone — deterministic primitives for the Whetstone agent-improvement loop.
 
@@ -10,6 +15,7 @@ Usage:
 
 Commands:
   init                 Scaffold the whetstone/ folder in the current repo.
+  validate             Validate the whetstone/ tree against schemas + invariants.
 
 Global options:
   -h, --help           Show this help.
@@ -30,6 +36,30 @@ Options:
 
 Pre-existing files are left untouched and reported as skipped. To refresh a
 file, delete it first and re-run init.
+`;
+
+const VALIDATE_USAGE = `whetstone validate — validate the whetstone/ tree.
+
+Usage:
+  whetstone validate [options]
+
+Checks:
+  - Structure: whetstone.config.md, failure_modes.json, traces/, failure_modes/, adapters/.
+  - Schemas:   failure_modes.json (FailureModesFile) and every traces/*.jsonl line (Trace).
+  - Invariants: unique failure-mode ids, affected-trace files & ids exist, bidirectional
+                links between failure modes and traces, no duplicate (filename, traceId)
+                entries, no dangling failureModeIds[] references on traces.
+
+Options:
+  -C, --cwd <path>     Directory to validate inside (default: process.cwd()).
+                       Must contain a whetstone/ folder.
+  --json               Emit a structured JSON report instead of human text.
+  -h, --help           Show this help.
+
+Exit codes:
+  0  validation passed
+  1  validation issues were found
+  2  could not run (missing/invalid --cwd, IO error)
 `;
 
 async function readVersion(): Promise<string> {
@@ -74,6 +104,40 @@ async function runInitCommand(argv: string[]): Promise<void> {
   await runInit({ cwd: parsed.values.cwd });
 }
 
+async function runValidateCommand(argv: string[]): Promise<void> {
+  let parsed;
+  try {
+    parsed = parseArgs({
+      args: argv,
+      options: {
+        cwd: { type: "string", short: "C" },
+        json: { type: "boolean", default: false },
+        help: { type: "boolean", short: "h", default: false },
+      },
+      allowPositionals: false,
+      strict: true,
+    });
+  } catch (err) {
+    fail((err as Error).message, 2);
+  }
+
+  if (parsed.values.help) {
+    process.stdout.write(VALIDATE_USAGE);
+    return;
+  }
+
+  let report;
+  try {
+    report = await runValidate({ cwd: parsed.values.cwd });
+  } catch (err) {
+    fail(err instanceof Error ? err.message : String(err), 2);
+  }
+
+  const output = parsed.values.json ? reportJson(report) : reportText(report);
+  process.stdout.write(output);
+  process.exit(report.ok ? 0 : 1);
+}
+
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
 
@@ -92,6 +156,9 @@ async function main(): Promise<void> {
   switch (command) {
     case "init":
       await runInitCommand(rest);
+      return;
+    case "validate":
+      await runValidateCommand(rest);
       return;
     default:
       fail(`unknown command: ${command}\n\n${USAGE}`);

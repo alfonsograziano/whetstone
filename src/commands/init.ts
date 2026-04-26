@@ -16,7 +16,7 @@ const FAILURE_MODES_SEED = `${JSON.stringify(
   2,
 )}\n`;
 
-const SUBDIRS = ["traces", "failure_modes", "adapters"] as const;
+export const SUBDIRS = ["traces", "failure_modes", "adapters"] as const;
 
 export interface InitOptions {
   cwd?: string;
