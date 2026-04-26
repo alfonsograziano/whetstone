@@ -1,0 +1,8 @@
+node_modules
+dist
+.env
+.mastra
+mastra.db
+mastra.db-journal
+mastra.db-shm
+mastra.db-wal
