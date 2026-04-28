@@ -257,3 +257,10 @@ All skills:
 
 ---
 
+## Sponsors
+
+This project is sponsored by [Nearform](https://nearform.com/).
+
+## License
+
+[MIT](LICENSE)
