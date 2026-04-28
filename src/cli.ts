@@ -3,10 +3,20 @@ import { parseArgs, styleText } from "node:util";
 
 import { runInit } from "./commands/init.ts";
 import {
+  formatFmJson,
+  formatFmText,
+  runFmGet,
+} from "./commands/fm-get.ts";
+import {
   reportJson as statusReportJson,
   reportText as statusReportText,
   runStatus,
 } from "./commands/status.ts";
+import {
+  formatTraceJson,
+  formatTraceText,
+  runTraceGet,
+} from "./commands/trace-get.ts";
 import {
   reportJson,
   reportText,
@@ -22,6 +32,8 @@ Commands:
   init                 Scaffold the whetstone/ folder in the current repo.
   validate             Validate the whetstone/ tree against schemas + invariants.
   status               Print catalogue health + pending-trace counts.
+  trace get <id>       Find a trace by id across all traces/*.jsonl files.
+  fm get <id>          Print a failure mode by id from failure_modes.json.
 
 Global options:
   -h, --help           Show this help.
@@ -65,6 +77,44 @@ Options:
 Exit codes:
   0  validation passed
   1  validation issues were found
+  2  could not run (missing/invalid --cwd, IO error)
+`;
+
+const TRACE_GET_USAGE = `whetstone trace get <id> — find a trace by id.
+
+Usage:
+  whetstone trace get <id> [options]
+
+Searches all traces/*.jsonl files under whetstone/ (sorted alphabetically) and
+prints the first trace whose "id" field matches. Scanning stops at first match.
+
+Options:
+  -C, --cwd <path>     Directory to inspect (default: process.cwd()).
+  --json               Emit a structured JSON object instead of pretty-printed trace.
+  -h, --help           Show this help.
+
+Exit codes:
+  0  trace found and printed
+  1  trace not found
+  2  could not run (missing/invalid --cwd, IO error)
+`;
+
+const FM_GET_USAGE = `whetstone fm get <id> — print a failure mode by id.
+
+Usage:
+  whetstone fm get <id> [options]
+
+Looks up the failure mode whose "id" field matches in whetstone/failure_modes.json
+and prints it.
+
+Options:
+  -C, --cwd <path>     Directory to inspect (default: process.cwd()).
+  --json               Emit a structured JSON object instead of pretty-printed record.
+  -h, --help           Show this help.
+
+Exit codes:
+  0  failure mode found and printed
+  1  failure mode not found
   2  could not run (missing/invalid --cwd, IO error)
 `;
 
@@ -167,6 +217,88 @@ async function runValidateCommand(argv: string[]): Promise<void> {
   process.exit(report.ok ? 0 : 1);
 }
 
+async function runTraceGetCommand(argv: string[]): Promise<void> {
+  let parsed;
+  try {
+    parsed = parseArgs({
+      args: argv,
+      options: {
+        cwd: { type: "string", short: "C" },
+        json: { type: "boolean", default: false },
+        help: { type: "boolean", short: "h", default: false },
+      },
+      allowPositionals: true,
+      strict: true,
+    });
+  } catch (err) {
+    fail((err as Error).message, 2);
+  }
+
+  if (parsed.values.help) {
+    process.stdout.write(TRACE_GET_USAGE);
+    return;
+  }
+
+  const id = parsed.positionals[0];
+  if (!id) {
+    fail("Usage: whetstone trace get <id>", 2);
+  }
+
+  let result;
+  try {
+    result = await runTraceGet(id, { cwd: parsed.values.cwd });
+  } catch (err) {
+    fail(err instanceof Error ? err.message : String(err), 2);
+  }
+
+  const output = parsed.values.json
+    ? formatTraceJson(result)
+    : formatTraceText(result);
+  process.stdout.write(output);
+  process.exit(result.trace ? 0 : 1);
+}
+
+async function runFmGetCommand(argv: string[]): Promise<void> {
+  let parsed;
+  try {
+    parsed = parseArgs({
+      args: argv,
+      options: {
+        cwd: { type: "string", short: "C" },
+        json: { type: "boolean", default: false },
+        help: { type: "boolean", short: "h", default: false },
+      },
+      allowPositionals: true,
+      strict: true,
+    });
+  } catch (err) {
+    fail((err as Error).message, 2);
+  }
+
+  if (parsed.values.help) {
+    process.stdout.write(FM_GET_USAGE);
+    return;
+  }
+
+  const id = parsed.positionals[0];
+  if (!id) {
+    fail("Usage: whetstone fm get <id>", 2);
+  }
+
+  let result;
+  try {
+    result = await runFmGet(id, { cwd: parsed.values.cwd });
+  } catch (err) {
+    fail(err instanceof Error ? err.message : String(err), 2);
+  }
+
+  const output = parsed.values.json
+    ? formatFmJson(result)
+    : formatFmText(result);
+  process.stdout.write(output);
+  process.exit(result.failureMode ? 0 : 1);
+}
+
 async function runStatusCommand(argv: string[]): Promise<void> {
   let parsed;
   try {
@@ -227,6 +359,24 @@ async function main(): Promise<void> {
     case "status":
       await runStatusCommand(rest);
       return;
+    case "trace": {
+      const [sub, ...traceRest] = rest;
+      if (sub === "get") {
+        await runTraceGetCommand(traceRest);
+        return;
+      }
+      fail(`unknown subcommand: trace ${sub ?? ""}\n\nRun 'whetstone trace get <id>' to look up a trace.`);
+      return;
+    }
+    case "fm": {
+      const [sub, ...fmRest] = rest;
+      if (sub === "get") {
+        await runFmGetCommand(fmRest);
+        return;
+      }
+      fail(`unknown subcommand: fm ${sub ?? ""}\n\nRun 'whetstone fm get <id>' to look up a failure mode.`);
+      return;
+    }
     default:
       fail(`unknown command: ${command}\n\n${USAGE}`);
   }
