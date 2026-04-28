@@ -64,7 +64,7 @@ For each batch (cap at `max_batches`):
     - A trace may match multiple failure modes if it genuinely exhibits multiple distinct failures.
     - A trace whose negative signal has no observable failure (e.g. thumbs-down on a correct answer) should be **skipped** with an explanatory note — don't manufacture a failure mode to absorb it.
 
-2. **Apply the writes (in memory first, then atomically to disk).** See §5 for exact field shapes.
+2. **Apply the writes.** See §5 for exact field shapes.
 
     - **For each classified trace:** set `analysis.status = "analyzed"`, `analysis.analyzedAt = <current UTC ISO>`, `analysis.notes = <one-line classification rationale>`, and append the matched / refined / created failure-mode id(s) to `failureModeIds[]` (de-duplicate). Don't touch `input`, `output`, `feedback`, or `originalTrace` — those are adapter-owned.
     - **For pending-but-out-of-scope traces in the batch slice** (negative-signalled but no observable failure, or signal but ambiguous): set `analysis.status = "skipped"`, `analysis.notes = "<reason>"`. Don't touch `failureModeIds[]`.
@@ -72,10 +72,7 @@ For each batch (cap at `max_batches`):
 
     > **10-trace cap on `affectedTraces[]`.** Each failure mode keeps at most **10** example traces. The list is a representative sample, not a full index — the canonical record of which traces belong to a failure mode is the `failureModeIds[]` backlink on each trace. After appending the new entry, if `affectedTraces[]` now has more than 10 entries, drop the oldest ones (by position in the array — earlier entries are older) until exactly 10 remain. When dropping an entry, do **not** touch the corresponding trace record — its `failureModeIds[]` backlink stays intact. This is intentional: `failureModeIds[]` on the trace is the source of truth; `affectedTraces[]` on the FM is a capped sample for human inspection.
 
-3. **Write atomically.** A crash mid-batch must never leave a half-written `failure_modes.json` or trace file.
-
-    - Trace file: rewrite the entire file from memory to `<file>.tmp`, fsync, rename over `<file>`. (JSONL is line-structured but in-place line edits aren't safe — a full rewrite under temp+rename is.)
-    - `failure_modes.json`: pretty-print (2-space indent, trailing newline) to `failure_modes.json.tmp`, fsync, rename over `failure_modes.json`.
+3. **Write to disk.** Rewrite the trace file from memory (JSONL is line-structured; a full rewrite is needed for in-place edits). Pretty-print `failure_modes.json` with 2-space indent and a trailing newline.
 
 4. **Validate, and self-correct on failure.** Run `npx whetstone validate --json` (the JSON output is structured: each issue carries `code`, `file`, `line` (for JSONL), `path` (dotted JSON path), `message`, and `hint`).
 
