@@ -308,12 +308,21 @@ async function main() {
       continue;
     }
     const { input, output } = extractInputOutput(original);
+    const outPath = resolve(process.cwd(), args.out);
+    const originalDir = resolve(dirname(outPath), "original");
+    await mkdir(originalDir, { recursive: true });
+    const originalFile = `${traceId}.json`;
+    await writeFile(
+      resolve(originalDir, originalFile),
+      JSON.stringify(original, null, 2),
+      "utf8",
+    );
     records.push({
       id: traceId,
       input,
       output,
       feedback: byTrace.get(traceId)!.map(toWhetstoneFeedback),
-      originalTrace: original,
+      originalTraceFile: `original/${originalFile}`,
       failureModeIds: [],
       analysis: { status: "pending", analyzedAt: null, notes: null },
     });
@@ -330,7 +339,9 @@ async function main() {
 
 async function writeOutput(records: unknown[]): Promise<void> {
   const outPath = resolve(process.cwd(), args.out);
-  await mkdir(dirname(outPath), { recursive: true });
+  const outDir = dirname(outPath);
+  const originalDir = resolve(outDir, "original");
+  await mkdir(originalDir, { recursive: true });
   const body = records.map((r) => JSON.stringify(r)).join("\n") + (records.length ? "\n" : "");
   await writeFile(outPath, body, "utf8");
 }
