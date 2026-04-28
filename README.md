@@ -1,6 +1,16 @@
 # Whetstone
 
-A semi-automatic improvement loop for LLM-based agents. Whetstone ingests production traces, harvests feedback, discovers and catalogues failure modes, then drives a coding agent through a spec → implement → verify cycle — leaving the working tree ready for human review at every step.
+![Whetstone](public/hero.png)
+
+**Whetstone closes the loop between your LLM agent in production and the next fix you ship.**
+
+## The problem
+
+Teams ship LLM agents and then operate them blind. Telemetry is collected but rarely closed back into the development loop. Failure modes get discovered ad-hoc, usually by one engineer scrolling Langfuse on a Friday afternoon. Fixes are one-off, and rarely regression-tested against the trace that motivated them. Expensive SME review effort gets thrown away after a single Slack comment.
+
+## What Whetstone does
+
+Whetstone ingests production traces from any telemetry source, harvests feedback from users and subject-matter experts, and clusters recurring failures into a persistent, versioned catalogue that lives as a diffable file in your repo. For every failure mode, a coding agent drafts a fix spec you review *before* code is touched, implements the change in your working tree, and replays the original failing cohort against the patched agent to confirm the fix actually worked. Every state transition is human-reviewed; nothing gets committed, pushed, or merged without you.
 
 ```
 ingest traces → extract feedback → cluster failure modes → propose fix → verify → (optionally) harden
@@ -11,6 +21,9 @@ Whetstone is opinionated about the *workflow* and agnostic about the telemetry s
 ---
 
 ## How it works
+
+![How it works](public/how-it-works.png)
+
 
 Whetstone has two parts:
 
