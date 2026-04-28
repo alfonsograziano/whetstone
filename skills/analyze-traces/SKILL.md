@@ -68,7 +68,9 @@ For each batch (cap at `max_batches`):
 
     - **For each classified trace:** set `analysis.status = "analyzed"`, `analysis.analyzedAt = <current UTC ISO>`, `analysis.notes = <one-line classification rationale>`, and append the matched / refined / created failure-mode id(s) to `failureModeIds[]` (de-duplicate). Don't touch `input`, `output`, `feedback`, or `originalTrace` — those are adapter-owned.
     - **For pending-but-out-of-scope traces in the batch slice** (negative-signalled but no observable failure, or signal but ambiguous): set `analysis.status = "skipped"`, `analysis.notes = "<reason>"`. Don't touch `failureModeIds[]`.
-    - **For each affected failure mode:** append `{ filename, traceId }` to `affectedTraces[]` (de-duplicate by `(filename, traceId)`); update `lastUpdated`. For newly created failure modes: pick `id = fm_<UTC year>_<UTC month>_<slug>` (slug = lowercased ASCII title with spaces → underscores, max ~6 words, no dates or trace ids), set `status = "discovered"`, `discoveredAt`, `lastUpdated`, `tags`, `title`, `description`, `affectedTraces`.
+    - **For each affected failure mode:** append `{ filename, traceId }` to `affectedTraces[]` (de-duplicate by `(filename, traceId)`); update `lastUpdated`. Then **enforce the 10-trace cap** — see the rule below. For newly created failure modes: pick `id = fm_<UTC year>_<UTC month>_<slug>` (slug = lowercased ASCII title with spaces → underscores, max ~6 words, no dates or trace ids), set `status = "discovered"`, `discoveredAt`, `lastUpdated`, `tags`, `title`, `description`, `affectedTraces`.
+
+    > **10-trace cap on `affectedTraces[]`.** Each failure mode keeps at most **10** example traces. The list is a representative sample, not a full index — the canonical record of which traces belong to a failure mode is the `failureModeIds[]` backlink on each trace. After appending the new entry, if `affectedTraces[]` now has more than 10 entries, drop the oldest ones (by position in the array — earlier entries are older) until exactly 10 remain. When dropping an entry, do **not** touch the corresponding trace record — its `failureModeIds[]` backlink stays intact. This is intentional: `failureModeIds[]` on the trace is the source of truth; `affectedTraces[]` on the FM is a capped sample for human inspection.
 
 3. **Write atomically.** A crash mid-batch must never leave a half-written `failure_modes.json` or trace file.
 
@@ -187,7 +189,7 @@ Mirrors `src/schemas/trace.ts` and `src/schemas/failure-mode.ts`. Validated by `
 | `tags` | array of string | Lowercase, hyphenated. New entries: 1-3 tags. |
 | `discoveredAt` | ISO 8601 UTC or null | Set on creation. |
 | `lastUpdated` | ISO 8601 UTC or null | **Update** every time you touch the FM. |
-| `affectedTraces` | array | **You append.** |
+| `affectedTraces` | array | **You append**, then cap at 10. Oldest entries (lowest index) are dropped when the list exceeds 10. This is a sample for human inspection — the authoritative backlink lives on the trace's `failureModeIds[]`. |
 | `affectedTraces[].filename` | string | Basename under `whetstone/traces/`, not the full path. |
 | `affectedTraces[].traceId` | string | Must match an existing trace's `id` inside that file. |
 
@@ -201,6 +203,8 @@ Mirrors `src/schemas/trace.ts` and `src/schemas/failure-mode.ts`. Validated by `
 - Bidirectional: trace listed under FM ⇒ trace's `failureModeIds[]` includes that FM's id.
 - No duplicate `(filename, traceId)` per FM.
 - No `failureModeIds[]` on a trace that doesn't resolve to an FM.
+
+> Note: the inverse is not an invariant — a trace may have an FM id in `failureModeIds[]` without appearing in that FM's `affectedTraces[]` (because it was evicted by the 10-trace cap). `whetstone validate` does not flag this.
 
 
 ### 6. Wrap up
@@ -229,3 +233,4 @@ After the skill runs to completion:
 - **Validate after every batch and self-correct.** The catalogue is the source of truth; partial writes corrupt it. Read the structured validate report and fix issues by `path`, then re-validate. Stop and surface to the user only after 5 unsuccessful loops on the same batch.
 - **No commits, no pushes, no PRs.** This skill leaves the working tree dirty and stops. Publishing is the user's call.
 - **Honor the project's hard rules** from `whetstone.config.md`. Quote them in your first response so the user sees them.
+- **Cap `affectedTraces[]` at 10 per failure mode.** After appending, drop oldest entries (lowest index) until ≤ 10 remain. Never remove the corresponding trace's `failureModeIds[]` backlink — the trace keeps its FM reference even when evicted from the sample list.
