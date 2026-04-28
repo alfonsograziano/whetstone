@@ -34,6 +34,8 @@ Read into memory:
 - `whetstone/failure_modes.json` — current catalogue. Index by `id`. Note titles, descriptions, and tags so you can reason about matches.
 - The chosen trace file, line by line.
 
+> **Do NOT preload `originalTraceFile` content for all traces upfront.** Each trace stores a path pointer (e.g. `"original/trc_abc123.json"`). Read those files on demand — only for the traces in the current batch, and only when classifying. Loading all raw traces at once defeats the purpose of splitting them out and will exhaust the context window on large files.
+
 For inspecting JSON from the shell, prefer `jq` / `jq -c`. Don't `grep`/`sed`/`awk` against JSON — JSON's structure isn't line-oriented and a stray reformat or new field will silently break those filters.
 
 ### 2. Determine the eligible set and slice the batch
@@ -96,7 +98,15 @@ The catalogue is the agent's persistent memory of "what's broken." Fragmenting i
 In one sentence, pin down what actually went wrong:
 - What did the user / SME complain about?
 - What did the assistant produce, or fail to produce?
-- What's the underlying cause as best you can tell from `originalTrace` (missing tool call, wrong tool args, hallucinated content, broken JSON, latency, refusal, off-topic, …)?
+- What's the underlying cause? Read the raw trace file on demand to inspect tool calls, messages, and metadata:
+
+  ```bash
+  cat whetstone/traces/$(jq -r .originalTraceFile <path/to/trace-line.json>)
+  # or, working from a batch of extracted lines:
+  cat whetstone/traces/original/<traceId>.json
+  ```
+
+  Look for: missing tool calls, wrong tool args, hallucinated content, broken JSON, latency spikes, refusals, off-topic responses.
 
 If you can't pin it down (the `originalTrace` is too thin, the feedback is ambiguous), set `analysis.status = "skipped"` with a note saying so. Don't force a classification you don't believe in.
 
@@ -159,7 +169,7 @@ Mirrors `src/schemas/trace.ts` and `src/schemas/failure-mode.ts`. Validated by `
 | `feedback[].sentiment` | `"positive" \| "negative"` | |
 | `feedback[].source` | `"user" \| "sme" \| "other"` | |
 | `feedback[].comment` | string | |
-| `originalTrace` | unknown | Verbatim provider payload. Read on demand for full transcript / tool calls. Don't modify. |
+| `originalTraceFile` | string | Path relative to `whetstone/traces/` pointing to the raw provider payload (e.g. `"original/trc_abc123.json"`). Read on demand per-batch entry — do **not** preload all files. Don't modify. |
 | `failureModeIds` | array of string | **You append.** Each entry must reference an existing `id` in `failure_modes.json`. De-duplicate. |
 | `analysis.status` | `"pending" \| "analyzed" \| "skipped" \| "error"` | **You set this.** End state must be `analyzed` or `skipped`. |
 | `analysis.analyzedAt` | string (ISO 8601 UTC) or null | **You set** when status flips to `analyzed`. |
@@ -192,33 +202,6 @@ Mirrors `src/schemas/trace.ts` and `src/schemas/failure-mode.ts`. Validated by `
 - No duplicate `(filename, traceId)` per FM.
 - No `failureModeIds[]` on a trace that doesn't resolve to an FM.
 
-#### Example — trace before and after
-
-Before:
-```json
-{"id":"trc_01HV3K9YJZ7","input":"refund order #4421","output":"I've processed a refund","feedback":[{"sentiment":"negative","source":"user","comment":"refund never arrived"}],"originalTrace":{"...":"..."},"failureModeIds":[],"analysis":{"status":"pending"}}
-```
-
-After (matched to `fm_2026_04_hallucinated_action`):
-```json
-{"id":"trc_01HV3K9YJZ7","input":"refund order #4421","output":"I've processed a refund","feedback":[{"sentiment":"negative","source":"user","comment":"refund never arrived"}],"originalTrace":{"...":"..."},"failureModeIds":["fm_2026_04_hallucinated_action"],"analysis":{"status":"analyzed","analyzedAt":"2026-04-26T10:11:00Z","notes":"refund-side-effect claim with no issue_refund tool call → matches fm_2026_04_hallucinated_action"}}
-```
-
-Newly created FM:
-```json
-{
-  "id": "fm_2026_04_hallucinated_action",
-  "title": "Agent claims a tool side-effect that never happened",
-  "description": "In refund and account-mutation flows the assistant verbally confirms a side-effect (refund issued, password reset, ticket closed) without an accompanying tool call.",
-  "status": "discovered",
-  "tags": ["hallucination", "tool-use"],
-  "discoveredAt": "2026-04-26T10:11:00Z",
-  "lastUpdated": "2026-04-26T10:11:00Z",
-  "affectedTraces": [
-    { "filename": "langfuse-2026-04-26.jsonl", "traceId": "trc_01HV3K9YJZ7" }
-  ]
-}
-```
 
 ### 6. Wrap up
 

@@ -35,7 +35,7 @@ function traceLine(t: TraceShape): string {
     input: t.input ?? "test input",
     output: t.output ?? "test output",
     feedback: t.feedback ?? [],
-    originalTrace: {},
+    originalTraceFile: "original/placeholder.json",
     failureModeIds: t.failureModeIds ?? [],
     analysis: t.analysis ?? { status: "analyzed" },
   })}\n`;

@@ -27,7 +27,7 @@ export const TraceSchema = z.object({
   input: z.string(),
   output: z.string(),
   feedback: z.array(FeedbackSchema).default([]),
-  originalTrace: z.unknown(),
+  originalTraceFile: z.string(),
   failureModeIds: z.array(z.string()).default([]),
   analysis: AnalysisSchema,
 });

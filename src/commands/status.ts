@@ -55,6 +55,8 @@ export interface StatusReport {
     fileCount: number;
     pendingCount: number;
     perFile: StatusTraceFileSummary[];
+    /** Number of raw trace files stored under traces/original/. */
+    originalTraceCount: number;
   };
 }
 
@@ -217,6 +219,8 @@ export async function runStatus(
   const perFile: StatusTraceFileSummary[] = [];
   let pendingCount = 0;
 
+  let originalTraceCount = 0;
+
   if (tracesInfo.exists && tracesInfo.isDir) {
     const entries = (await readdir(tracesDir))
       .filter((n) => n.endsWith(".jsonl"))
@@ -228,6 +232,16 @@ export async function runStatus(
       const counts = await summariseTraceFile(abs);
       perFile.push({ filename: name, ...counts });
       pendingCount += counts.pendingTraces;
+    }
+
+    const originalDir = join(tracesDir, "original");
+    const originalInfo = await inspectPath(originalDir);
+    if (originalInfo.exists && originalInfo.isDir) {
+      const origEntries = await readdir(originalDir);
+      for (const name of origEntries) {
+        const info = await inspectPath(join(originalDir, name));
+        if (info.isFile) originalTraceCount += 1;
+      }
     }
   }
 
@@ -243,6 +257,7 @@ export async function runStatus(
       fileCount: perFile.length,
       pendingCount,
       perFile,
+      originalTraceCount,
     },
   };
 }
@@ -312,6 +327,11 @@ export function reportText(report: StatusReport): string {
           f.totalTraces,
           4,
         )} traces, ${pendingLabel}`,
+      );
+    }
+    if (traces.originalTraceCount > 0) {
+      lines.push(
+        `  ${styleText("dim", `${traces.originalTraceCount} raw file${traces.originalTraceCount === 1 ? "" : "s"} in traces/original/`)}`,
       );
     }
   }

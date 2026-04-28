@@ -82,6 +82,7 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
   for (const sub of SUBDIRS) {
     await mkdir(join(rootPath, sub), { recursive: true });
   }
+  await mkdir(join(rootPath, "traces", "original"), { recursive: true });
 
   const templateContents = await readFile(TEMPLATE_PATH, "utf8");
 
