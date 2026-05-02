@@ -1,6 +1,6 @@
 import { createReadStream } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
-import { isAbsolute, join, resolve } from "node:path";
+import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { styleText } from "node:util";
 
@@ -12,12 +12,13 @@ import {
   type FailureMode,
   type Trace,
 } from "../schemas/index.ts";
+import { resolveAgentRootForRead } from "./agent-root.ts";
 import { SUBDIRS } from "./init.ts";
 
 export interface ValidationIssue {
   code: string;
   severity: "error";
-  /** Path relative to the whetstone/ root, e.g. "traces/langfuse-2026-04-26.jsonl". */
+  /** Path relative to the agent root, e.g. "traces/langfuse-2026-04-26.jsonl". */
   file?: string;
   /** 1-based for NDJSON lines. */
   line?: number;
@@ -29,7 +30,7 @@ export interface ValidationIssue {
 
 export interface ValidationReport {
   ok: boolean;
-  /** Absolute path to the whetstone/ root that was inspected. */
+  /** Absolute path to the `whetstone/<agent>/` root that was inspected. */
   rootPath: string;
   summary: {
     fileCount: number;
@@ -40,6 +41,7 @@ export interface ValidationReport {
 
 export interface ValidateOptions {
   cwd?: string;
+  agent?: string;
 }
 
 const REQUIRED_FILES = ["whetstone.config.md", "failure_modes.json"] as const;
@@ -175,36 +177,16 @@ function zodIssuesToValidation(
 export async function runValidate(
   options: ValidateOptions = {},
 ): Promise<ValidationReport> {
-  const cwdInput = options.cwd ?? process.cwd();
-  const cwdAbsolute = isAbsolute(cwdInput)
-    ? cwdInput
-    : resolve(process.cwd(), cwdInput);
+  const { rootPath, agentName } = await resolveAgentRootForRead({
+    cwd: options.cwd,
+    agent: options.agent,
+  });
 
-  const cwdInfo = await inspectPath(cwdAbsolute);
-  if (!cwdInfo.exists) {
-    throw new Error(`--cwd path does not exist: ${cwdAbsolute}`);
-  }
-  if (!cwdInfo.isDir) {
-    throw new Error(`--cwd path is not a directory: ${cwdAbsolute}`);
-  }
-
-  const rootPath = join(cwdAbsolute, "whetstone");
   const issues: ValidationIssue[] = [];
   let fileCount = 0;
 
-  // Pass 1: structure.
-  const rootInfo = await inspectPath(rootPath);
-  if (!rootInfo.exists || !rootInfo.isDir) {
-    issues.push({
-      code: "WHET_STRUCT_MISSING",
-      severity: "error",
-      file: "whetstone/",
-      message: `whetstone/ directory not found at ${rootPath}.`,
-      hint: 'Run "whetstone init" inside this repo to scaffold the directory.',
-    });
-    return finalize(rootPath, issues, fileCount);
-  }
-
+  // Pass 1: structure. resolveAgentRootForRead has already verified the agent dir
+  // exists, so we only check the required files and subdirs inside it.
   for (const f of REQUIRED_FILES) {
     const info = await inspectPath(join(rootPath, f));
     if (!info.exists || !info.isFile) {
@@ -212,8 +194,8 @@ export async function runValidate(
         code: "WHET_STRUCT_MISSING",
         severity: "error",
         file: f,
-        message: `Required file is missing: whetstone/${f}.`,
-        hint: 'Run "whetstone init" to recreate it (existing files are preserved).',
+        message: `Required file is missing: whetstone/${agentName}/${f}.`,
+        hint: `Run "whetstone init ${agentName}" to recreate it (existing files are preserved).`,
       });
     }
   }
@@ -225,8 +207,8 @@ export async function runValidate(
         code: "WHET_STRUCT_MISSING",
         severity: "error",
         file: `${sub}/`,
-        message: `Required subdirectory is missing: whetstone/${sub}/.`,
-        hint: 'Run "whetstone init" to recreate it.',
+        message: `Required subdirectory is missing: whetstone/${agentName}/${sub}/.`,
+        hint: `Run "whetstone init ${agentName}" to recreate it.`,
       });
     }
   }

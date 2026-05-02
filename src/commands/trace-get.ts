@@ -1,18 +1,20 @@
 import { createReadStream } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
-import { isAbsolute, join, resolve } from "node:path";
+import { join } from "node:path";
 import { createInterface } from "node:readline";
 
 import { TraceSchema, type Trace } from "../schemas/index.ts";
+import { resolveAgentRootForRead } from "./agent-root.ts";
 
 export interface TraceGetOptions {
   cwd?: string;
+  agent?: string;
 }
 
 export interface TraceGetResult {
   /** The matched trace, or null if not found. */
   trace: Trace | null;
-  /** Path of the JSONL file that contained the trace, relative to whetstone/. */
+  /** Path of the JSONL file that contained the trace, relative to `whetstone/<agent>/`. */
   file: string | null;
   /** 1-based line number within that file. */
   line: number | null;
@@ -29,7 +31,7 @@ async function pathExists(p: string): Promise<boolean> {
 }
 
 /**
- * Search all traces/*.jsonl files under whetstone/ for a trace matching `id`.
+ * Search all traces/*.jsonl files under `whetstone/<agent>/` for a trace matching `id`.
  * Files are scanned in sorted order; scanning stops at first match.
  */
 export async function runTraceGet(
@@ -40,21 +42,10 @@ export async function runTraceGet(
     throw new Error("trace id must be a non-empty string");
   }
 
-  const cwdInput = options.cwd ?? process.cwd();
-  const cwdAbsolute = isAbsolute(cwdInput)
-    ? cwdInput
-    : resolve(process.cwd(), cwdInput);
-
-  if (!(await pathExists(cwdAbsolute))) {
-    throw new Error(`--cwd path does not exist: ${cwdAbsolute}`);
-  }
-
-  const rootPath = join(cwdAbsolute, "whetstone");
-  if (!(await pathExists(rootPath))) {
-    throw new Error(
-      `whetstone/ directory not found at ${rootPath}. Run "whetstone init" first.`,
-    );
-  }
+  const { rootPath } = await resolveAgentRootForRead({
+    cwd: options.cwd,
+    agent: options.agent,
+  });
 
   const tracesDir = join(rootPath, "traces");
   if (!(await pathExists(tracesDir))) {
@@ -81,7 +72,6 @@ export async function runTraceGet(
     const rl = createInterface({ input: stream, crlfDelay: Infinity });
 
     let lineNo = 0;
-    let found = false;
 
     try {
       for await (const raw of rl) {
@@ -100,7 +90,6 @@ export async function runTraceGet(
         if (!result.success) continue; // schema mismatch — skip
 
         if (result.data.id === id) {
-          found = true;
           rl.close();
           stream.destroy();
           return {
@@ -110,9 +99,9 @@ export async function runTraceGet(
           };
         }
       }
-    } catch (err) {
+    } catch {
       // Unreadable file — skip and keep searching
-      if (!found) continue;
+      continue;
     }
   }
 

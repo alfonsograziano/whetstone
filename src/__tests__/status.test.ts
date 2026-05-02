@@ -15,6 +15,12 @@ async function makeTmp(): Promise<string> {
   return await mkdtemp(join(tmpdir(), "whetstone-status-"));
 }
 
+const AGENT = "test-agent";
+
+function agentRoot(cwd: string, agent: string = AGENT): string {
+  return join(cwd, "whetstone", agent);
+}
+
 interface FmShape {
   id: string;
   status?: string;
@@ -23,7 +29,11 @@ interface FmShape {
   affectedTraces?: Array<{ filename: string; traceId: string }>;
 }
 
-async function writeFms(cwd: string, fms: FmShape[]): Promise<void> {
+async function writeFms(
+  cwd: string,
+  fms: FmShape[],
+  agent: string = AGENT,
+): Promise<void> {
   const body = JSON.stringify(
     {
       failureModes: fms.map((fm) => ({
@@ -39,7 +49,7 @@ async function writeFms(cwd: string, fms: FmShape[]): Promise<void> {
     null,
     2,
   );
-  await writeFile(join(cwd, "whetstone", "failure_modes.json"), body, "utf8");
+  await writeFile(join(agentRoot(cwd, agent), "failure_modes.json"), body, "utf8");
 }
 
 interface TraceShape {
@@ -51,6 +61,7 @@ async function writeTraces(
   cwd: string,
   filename: string,
   traces: TraceShape[],
+  agent: string = AGENT,
 ): Promise<void> {
   const body = traces
     .map((t) =>
@@ -65,15 +76,19 @@ async function writeTraces(
       }),
     )
     .join("\n");
-  await writeFile(join(cwd, "whetstone", "traces", filename), `${body}\n`, "utf8");
+  await writeFile(
+    join(agentRoot(cwd, agent), "traces", filename),
+    `${body}\n`,
+    "utf8",
+  );
 }
 
 test("empty catalogue from runInit reports zero failure modes", async (t) => {
   const cwd = await makeTmp();
   t.after(() => rm(cwd, { recursive: true, force: true }));
 
-  await runInit({ cwd });
-  const report = await runStatus({ cwd });
+  await runInit({ cwd, agent: AGENT });
+  const report = await runStatus({ cwd, agent: AGENT });
 
   assert.equal(report.catalogue.totalFailureModes, 0);
   assert.deepEqual(report.catalogue.byStatus, {});
@@ -87,7 +102,7 @@ test("counts failure modes by status, ordered by lifecycle", async (t) => {
   const cwd = await makeTmp();
   t.after(() => rm(cwd, { recursive: true, force: true }));
 
-  await runInit({ cwd });
+  await runInit({ cwd, agent: AGENT });
   await writeFms(cwd, [
     { id: "fm_a", status: "investigating" },
     { id: "fm_b", status: "investigating" },
@@ -97,7 +112,7 @@ test("counts failure modes by status, ordered by lifecycle", async (t) => {
     { id: "fm_f", status: "duplicate_of:fm_a" },
   ]);
 
-  const report = await runStatus({ cwd });
+  const report = await runStatus({ cwd, agent: AGENT });
 
   assert.equal(report.catalogue.totalFailureModes, 6);
   assert.deepEqual(report.catalogue.byStatus, {
@@ -108,8 +123,6 @@ test("counts failure modes by status, ordered by lifecycle", async (t) => {
     duplicate_of: 1,
   });
 
-  // Lifecycle order: discovered before investigating before spec_drafted before
-  // verified before duplicate_of.
   assert.deepEqual(Object.keys(report.catalogue.byStatus), [
     "discovered",
     "investigating",
@@ -123,7 +136,7 @@ test("recentlyUpdated is sorted by lastUpdated desc, capped at 5", async (t) => 
   const cwd = await makeTmp();
   t.after(() => rm(cwd, { recursive: true, force: true }));
 
-  await runInit({ cwd });
+  await runInit({ cwd, agent: AGENT });
   await writeFms(cwd, [
     { id: "fm_old", lastUpdated: "2026-01-01T00:00:00Z" },
     { id: "fm_mid", lastUpdated: "2026-03-01T00:00:00Z" },
@@ -134,7 +147,7 @@ test("recentlyUpdated is sorted by lastUpdated desc, capped at 5", async (t) => 
     { id: "fm_null", lastUpdated: null },
   ]);
 
-  const report = await runStatus({ cwd });
+  const report = await runStatus({ cwd, agent: AGENT });
 
   const ids = report.catalogue.recentlyUpdated.map((s) => s.id);
   assert.deepEqual(ids, ["fm_c", "fm_b", "fm_a", "fm_new", "fm_mid"]);
@@ -144,17 +157,16 @@ test("specsAwaitingApproval contains every spec_drafted FM", async (t) => {
   const cwd = await makeTmp();
   t.after(() => rm(cwd, { recursive: true, force: true }));
 
-  await runInit({ cwd });
+  await runInit({ cwd, agent: AGENT });
   await writeFms(cwd, [
     { id: "fm_x", status: "spec_drafted", lastUpdated: "2026-04-20T00:00:00Z" },
     { id: "fm_y", status: "investigating" },
     { id: "fm_z", status: "spec_drafted", lastUpdated: "2026-04-25T00:00:00Z" },
   ]);
 
-  const report = await runStatus({ cwd });
+  const report = await runStatus({ cwd, agent: AGENT });
 
   assert.equal(report.catalogue.specsAwaitingApproval.length, 2);
-  // Sorted by recency too — fm_z is newer.
   assert.equal(report.catalogue.specsAwaitingApproval[0]!.id, "fm_z");
   assert.equal(report.catalogue.specsAwaitingApproval[1]!.id, "fm_x");
 });
@@ -163,21 +175,20 @@ test("trace files report total + pending counts; malformed lines are ignored", a
   const cwd = await makeTmp();
   t.after(() => rm(cwd, { recursive: true, force: true }));
 
-  await runInit({ cwd });
+  await runInit({ cwd, agent: AGENT });
   await writeTraces(cwd, "a.jsonl", [
     { id: "t1", pending: true },
     { id: "t2", pending: false },
     { id: "t3", pending: true },
   ]);
   await writeTraces(cwd, "b.jsonl", [{ id: "t4", pending: false }]);
-  // Add a malformed line to confirm it doesn't blow up.
   await writeFile(
-    join(cwd, "whetstone", "traces", "c.jsonl"),
+    join(agentRoot(cwd), "traces", "c.jsonl"),
     `{"id":"ok","input":"","output":"","feedback":[],"originalTrace":{},"failureModeIds":[],"analysis":{"status":"pending"}}\n{ this is broken\n`,
     "utf8",
   );
 
-  const report = await runStatus({ cwd });
+  const report = await runStatus({ cwd, agent: AGENT });
 
   assert.equal(report.traces.fileCount, 3);
   assert.equal(report.traces.pendingCount, 3);
@@ -192,34 +203,49 @@ test("trace files report total + pending counts; malformed lines are ignored", a
   assert.equal(c.pendingTraces, 1);
 });
 
-test("missing whetstone/ throws", async (t) => {
+test("missing agent dir throws", async (t) => {
   const cwd = await makeTmp();
   t.after(() => rm(cwd, { recursive: true, force: true }));
 
-  await assert.rejects(runStatus({ cwd }), /whetstone\/ directory not found/);
+  await assert.rejects(
+    runStatus({ cwd, agent: AGENT }),
+    /no such agent/,
+  );
+});
+
+test("missing --agent throws with available list", async (t) => {
+  const cwd = await makeTmp();
+  t.after(() => rm(cwd, { recursive: true, force: true }));
+
+  await runInit({ cwd, agent: "alpha" });
+
+  await assert.rejects(
+    runStatus({ cwd }),
+    /--agent <name> is required.*alpha/s,
+  );
 });
 
 test("malformed failure_modes.json throws with hint to validate", async (t) => {
   const cwd = await makeTmp();
   t.after(() => rm(cwd, { recursive: true, force: true }));
 
-  await runInit({ cwd });
+  await runInit({ cwd, agent: AGENT });
   await writeFile(
-    join(cwd, "whetstone", "failure_modes.json"),
+    join(agentRoot(cwd), "failure_modes.json"),
     "{ this is not json",
     "utf8",
   );
 
-  await assert.rejects(runStatus({ cwd }), /whetstone validate/);
+  await assert.rejects(runStatus({ cwd, agent: AGENT }), /whetstone validate/);
 });
 
 test("schema-invalid failure_modes.json throws with hint to validate", async (t) => {
   const cwd = await makeTmp();
   t.after(() => rm(cwd, { recursive: true, force: true }));
 
-  await runInit({ cwd });
+  await runInit({ cwd, agent: AGENT });
   await writeFile(
-    join(cwd, "whetstone", "failure_modes.json"),
+    join(agentRoot(cwd), "failure_modes.json"),
     JSON.stringify({
       failureModes: [
         { id: "fm_x", title: "t", description: "d", status: "not_a_status" },
@@ -228,24 +254,23 @@ test("schema-invalid failure_modes.json throws with hint to validate", async (t)
     "utf8",
   );
 
-  await assert.rejects(runStatus({ cwd }), /whetstone validate/);
+  await assert.rejects(runStatus({ cwd, agent: AGENT }), /whetstone validate/);
 });
 
 test("text report mentions total, pending, and SPEC count", async (t) => {
   const cwd = await makeTmp();
   t.after(() => rm(cwd, { recursive: true, force: true }));
 
-  await runInit({ cwd });
+  await runInit({ cwd, agent: AGENT });
   await writeFms(cwd, [
     { id: "fm_x", status: "spec_drafted", lastUpdated: "2026-04-20T00:00:00Z" },
     { id: "fm_y", status: "investigating", lastUpdated: "2026-04-21T00:00:00Z" },
   ]);
   await writeTraces(cwd, "a.jsonl", [{ id: "t1", pending: true }]);
 
-  const report = await runStatus({ cwd });
-  // strip ANSI to make assertions reliable
+  const report = await runStatus({ cwd, agent: AGENT });
   // eslint-disable-next-line no-control-regex
-  const text = reportText(report).replace(/\[[0-9;]*m/g, "");
+  const text = reportText(report).replace(/\[[0-9;]*m/g, "");
 
   assert.match(text, /Catalogue: 2 failure modes/);
   assert.match(text, /spec_drafted/);
@@ -259,10 +284,10 @@ test("json report is valid JSON with the expected shape", async (t) => {
   const cwd = await makeTmp();
   t.after(() => rm(cwd, { recursive: true, force: true }));
 
-  await runInit({ cwd });
+  await runInit({ cwd, agent: AGENT });
   await writeFms(cwd, [{ id: "fm_x", lastUpdated: "2026-04-20T00:00:00Z" }]);
 
-  const report = await runStatus({ cwd });
+  const report = await runStatus({ cwd, agent: AGENT });
   const json = JSON.parse(reportJson(report)) as {
     catalogue: { totalFailureModes: number };
     traces: { fileCount: number };
@@ -270,4 +295,20 @@ test("json report is valid JSON with the expected shape", async (t) => {
 
   assert.equal(json.catalogue.totalFailureModes, 1);
   assert.equal(json.traces.fileCount, 0);
+});
+
+test("two agents are independent: writing to one doesn't show up in the other's status", async (t) => {
+  const cwd = await makeTmp();
+  t.after(() => rm(cwd, { recursive: true, force: true }));
+
+  await runInit({ cwd, agent: "alpha" });
+  await runInit({ cwd, agent: "beta" });
+
+  await writeFms(cwd, [{ id: "fm_only_in_alpha" }], "alpha");
+
+  const alphaReport = await runStatus({ cwd, agent: "alpha" });
+  const betaReport = await runStatus({ cwd, agent: "beta" });
+
+  assert.equal(alphaReport.catalogue.totalFailureModes, 1);
+  assert.equal(betaReport.catalogue.totalFailureModes, 0);
 });

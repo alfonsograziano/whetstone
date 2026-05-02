@@ -1,10 +1,12 @@
 import { stat, readFile } from "node:fs/promises";
-import { isAbsolute, join, resolve } from "node:path";
+import { join } from "node:path";
 
 import { FailureModesFileSchema, type FailureMode } from "../schemas/index.ts";
+import { resolveAgentRootForRead } from "./agent-root.ts";
 
 export interface FmGetOptions {
   cwd?: string;
+  agent?: string;
 }
 
 export interface FmGetResult {
@@ -23,7 +25,7 @@ async function pathExists(p: string): Promise<boolean> {
 }
 
 /**
- * Look up a single failure mode by id in whetstone/failure_modes.json.
+ * Look up a single failure mode by id in `whetstone/<agent>/failure_modes.json`.
  */
 export async function runFmGet(
   id: string,
@@ -33,26 +35,15 @@ export async function runFmGet(
     throw new Error("failure-mode id must be a non-empty string");
   }
 
-  const cwdInput = options.cwd ?? process.cwd();
-  const cwdAbsolute = isAbsolute(cwdInput)
-    ? cwdInput
-    : resolve(process.cwd(), cwdInput);
-
-  if (!(await pathExists(cwdAbsolute))) {
-    throw new Error(`--cwd path does not exist: ${cwdAbsolute}`);
-  }
-
-  const rootPath = join(cwdAbsolute, "whetstone");
-  if (!(await pathExists(rootPath))) {
-    throw new Error(
-      `whetstone/ directory not found at ${rootPath}. Run "whetstone init" first.`,
-    );
-  }
+  const { rootPath, agentName } = await resolveAgentRootForRead({
+    cwd: options.cwd,
+    agent: options.agent,
+  });
 
   const fmPath = join(rootPath, "failure_modes.json");
   if (!(await pathExists(fmPath))) {
     throw new Error(
-      `failure_modes.json not found at ${fmPath}. Run "whetstone init" first.`,
+      `failure_modes.json not found at ${fmPath}. Run "whetstone init ${agentName}" first.`,
     );
   }
 
@@ -77,7 +68,7 @@ export async function runFmGet(
   const result = FailureModesFileSchema.safeParse(parsed);
   if (!result.success) {
     throw new Error(
-      `failure_modes.json does not match the expected schema. Run "whetstone validate" for details.`,
+      `failure_modes.json does not match the expected schema. Run "whetstone validate --agent ${agentName}" for details.`,
     );
   }
 

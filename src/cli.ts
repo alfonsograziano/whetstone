@@ -1,6 +1,12 @@
 #!/usr/bin/env node
 import { parseArgs, styleText } from "node:util";
 
+import {
+  reportJson as agentsReportJson,
+  reportText as agentsReportText,
+  runAgents,
+} from "./commands/agents.ts";
+import { listAgents } from "./commands/agent-root.ts";
 import { runInit } from "./commands/init.ts";
 import {
   formatFmJson,
@@ -29,11 +35,12 @@ Usage:
   whetstone <command> [options]
 
 Commands:
-  init                 Scaffold the whetstone/ folder in the current repo.
-  validate             Validate the whetstone/ tree against schemas + invariants.
-  status               Print catalogue health + pending-trace counts.
-  trace get <id>       Find a trace by id across all traces/*.jsonl files.
-  fm get <id>          Print a failure mode by id from failure_modes.json.
+  init <agent-name>    Scaffold the whetstone/<agent-name>/ folder in the current repo.
+  agents               List the agents configured under whetstone/.
+  validate             Validate one agent's whetstone/<agent>/ tree against schemas + invariants.
+  status               Print catalogue health + pending-trace counts for one agent.
+  trace get <id>       Find a trace by id across one agent's traces/*.jsonl files.
+  fm get <id>          Print a failure mode by id from one agent's failure_modes.json.
 
 Global options:
   -h, --help           Show this help.
@@ -42,24 +49,48 @@ Global options:
 Run 'whetstone <command> --help' for command-specific options.
 `;
 
-const INIT_USAGE = `whetstone init — scaffold the whetstone/ folder.
+const INIT_USAGE = `whetstone init <agent-name> — scaffold whetstone/<agent-name>/.
 
 Usage:
-  whetstone init [options]
+  whetstone init <agent-name> [options]
+
+Positionals:
+  <agent-name>         Required. Lowercase letters, digits, underscores, hyphens.
+                       Must start with a letter or digit. Pattern: ^[a-z0-9][a-z0-9_-]*$
 
 Options:
   -C, --cwd <path>     Directory to initialise inside (default: process.cwd()).
                        Must exist and be a directory.
   -h, --help           Show this help.
 
-Pre-existing files are left untouched and reported as skipped. To refresh a
-file, delete it first and re-run init.
+Multiple agents can coexist as siblings under whetstone/. Pre-existing files
+are left untouched and reported as skipped. To refresh a file, delete it first
+and re-run init.
 `;
 
-const VALIDATE_USAGE = `whetstone validate — validate the whetstone/ tree.
+const AGENTS_USAGE = `whetstone agents — list the agents configured under whetstone/.
 
 Usage:
-  whetstone validate [options]
+  whetstone agents [options]
+
+Lists every subdirectory of whetstone/ that contains a whetstone.config.md file,
+sorted alphabetically. Subdirectories without that file are skipped silently
+(partial inits or unrelated folders). Exits 0 even when no agents are configured.
+
+Options:
+  -C, --cwd <path>     Directory to inspect (default: process.cwd()).
+  --json               Emit a structured JSON report ({ "agents": [{ "name", "path" }] }).
+  -h, --help           Show this help.
+
+Exit codes:
+  0  listing printed (may be empty)
+  2  could not run (missing/invalid --cwd)
+`;
+
+const VALIDATE_USAGE = `whetstone validate — validate one agent's whetstone/<agent>/ tree.
+
+Usage:
+  whetstone validate --agent <name> [options]
 
 Checks:
   - Structure: whetstone.config.md, failure_modes.json, traces/, failure_modes/, adapters/.
@@ -69,6 +100,7 @@ Checks:
                 entries, no dangling failureModeIds[] references on traces.
 
 Options:
+  -a, --agent <name>   Required. Agent to validate (under whetstone/<name>/).
   -C, --cwd <path>     Directory to validate inside (default: process.cwd()).
                        Must contain a whetstone/ folder.
   --json               Emit a structured JSON report instead of human text.
@@ -77,18 +109,19 @@ Options:
 Exit codes:
   0  validation passed
   1  validation issues were found
-  2  could not run (missing/invalid --cwd, IO error)
+  2  could not run (missing/invalid --cwd, missing or unknown --agent, IO error)
 `;
 
-const TRACE_GET_USAGE = `whetstone trace get <id> — find a trace by id.
+const TRACE_GET_USAGE = `whetstone trace get <id> — find a trace by id within one agent.
 
 Usage:
-  whetstone trace get <id> [options]
+  whetstone trace get <id> --agent <name> [options]
 
-Searches all traces/*.jsonl files under whetstone/ (sorted alphabetically) and
-prints the first trace whose "id" field matches. Scanning stops at first match.
+Searches all traces/*.jsonl files under whetstone/<agent>/ (sorted alphabetically)
+and prints the first trace whose "id" field matches. Scanning stops at first match.
 
 Options:
+  -a, --agent <name>   Required. Agent to search (under whetstone/<name>/).
   -C, --cwd <path>     Directory to inspect (default: process.cwd()).
   --json               Emit a structured JSON object instead of pretty-printed trace.
   -h, --help           Show this help.
@@ -96,18 +129,19 @@ Options:
 Exit codes:
   0  trace found and printed
   1  trace not found
-  2  could not run (missing/invalid --cwd, IO error)
+  2  could not run (missing/invalid --cwd, missing or unknown --agent, IO error)
 `;
 
-const FM_GET_USAGE = `whetstone fm get <id> — print a failure mode by id.
+const FM_GET_USAGE = `whetstone fm get <id> — print a failure mode by id within one agent.
 
 Usage:
-  whetstone fm get <id> [options]
+  whetstone fm get <id> --agent <name> [options]
 
-Looks up the failure mode whose "id" field matches in whetstone/failure_modes.json
-and prints it.
+Looks up the failure mode whose "id" field matches in
+whetstone/<agent>/failure_modes.json and prints it.
 
 Options:
+  -a, --agent <name>   Required. Agent to query (under whetstone/<name>/).
   -C, --cwd <path>     Directory to inspect (default: process.cwd()).
   --json               Emit a structured JSON object instead of pretty-printed record.
   -h, --help           Show this help.
@@ -115,13 +149,13 @@ Options:
 Exit codes:
   0  failure mode found and printed
   1  failure mode not found
-  2  could not run (missing/invalid --cwd, IO error)
+  2  could not run (missing/invalid --cwd, missing or unknown --agent, IO error)
 `;
 
-const STATUS_USAGE = `whetstone status — print catalogue health.
+const STATUS_USAGE = `whetstone status — print catalogue health for one agent.
 
 Usage:
-  whetstone status [options]
+  whetstone status --agent <name> [options]
 
 Reports:
   - Failure-mode counts by lifecycle status (discovered, investigating, verified, …).
@@ -130,6 +164,7 @@ Reports:
   - Per-file trace counts under traces/, including pending counts.
 
 Options:
+  -a, --agent <name>   Required. Agent to inspect (under whetstone/<name>/).
   -C, --cwd <path>     Directory to inspect (default: process.cwd()).
                        Must contain a whetstone/ folder.
   --json               Emit a structured JSON report instead of human text.
@@ -137,8 +172,8 @@ Options:
 
 Exit codes:
   0  status report printed
-  2  could not run (missing/invalid --cwd, missing whetstone/, malformed
-     failure_modes.json — run 'whetstone validate' for details)
+  2  could not run (missing/invalid --cwd, missing or unknown --agent, malformed
+     failure_modes.json — run 'whetstone validate --agent <name>' for details)
 `;
 
 async function readVersion(): Promise<string> {
@@ -159,6 +194,18 @@ function fail(message: string, exitCode = 1): never {
   process.exit(exitCode);
 }
 
+async function formatAvailableAgents(cwd?: string): Promise<string> {
+  try {
+    const agents = await listAgents(cwd);
+    if (agents.length === 0) {
+      return "(none — run 'whetstone init <name>' to create one)";
+    }
+    return agents.map((a) => a.name).join(", ");
+  } catch {
+    return "(unknown — could not read --cwd)";
+  }
+}
+
 async function runInitCommand(argv: string[]): Promise<void> {
   let parsed;
   try {
@@ -168,11 +215,11 @@ async function runInitCommand(argv: string[]): Promise<void> {
         cwd: { type: "string", short: "C" },
         help: { type: "boolean", short: "h", default: false },
       },
-      allowPositionals: false,
+      allowPositionals: true,
       strict: true,
     });
   } catch (err) {
-    fail((err as Error).message);
+    fail((err as Error).message, 2);
   }
 
   if (parsed.values.help) {
@@ -180,7 +227,22 @@ async function runInitCommand(argv: string[]): Promise<void> {
     return;
   }
 
-  await runInit({ cwd: parsed.values.cwd });
+  const agent = parsed.positionals[0];
+  if (!agent) {
+    fail("<agent-name> is required.\n\n" + INIT_USAGE, 2);
+  }
+  if (parsed.positionals.length > 1) {
+    fail(
+      `unexpected positional argument: "${parsed.positionals[1]}".\n\n${INIT_USAGE}`,
+      2,
+    );
+  }
+
+  try {
+    await runInit({ cwd: parsed.values.cwd, agent });
+  } catch (err) {
+    fail(err instanceof Error ? err.message : String(err), 2);
+  }
 }
 
 async function runValidateCommand(argv: string[]): Promise<void> {
@@ -189,6 +251,7 @@ async function runValidateCommand(argv: string[]): Promise<void> {
     parsed = parseArgs({
       args: argv,
       options: {
+        agent: { type: "string", short: "a" },
         cwd: { type: "string", short: "C" },
         json: { type: "boolean", default: false },
         help: { type: "boolean", short: "h", default: false },
@@ -205,9 +268,17 @@ async function runValidateCommand(argv: string[]): Promise<void> {
     return;
   }
 
+  if (!parsed.values.agent) {
+    const available = await formatAvailableAgents(parsed.values.cwd);
+    fail(`--agent <name> is required. Available agents: ${available}`, 2);
+  }
+
   let report;
   try {
-    report = await runValidate({ cwd: parsed.values.cwd });
+    report = await runValidate({
+      cwd: parsed.values.cwd,
+      agent: parsed.values.agent,
+    });
   } catch (err) {
     fail(err instanceof Error ? err.message : String(err), 2);
   }
@@ -223,6 +294,7 @@ async function runTraceGetCommand(argv: string[]): Promise<void> {
     parsed = parseArgs({
       args: argv,
       options: {
+        agent: { type: "string", short: "a" },
         cwd: { type: "string", short: "C" },
         json: { type: "boolean", default: false },
         help: { type: "boolean", short: "h", default: false },
@@ -241,12 +313,20 @@ async function runTraceGetCommand(argv: string[]): Promise<void> {
 
   const id = parsed.positionals[0];
   if (!id) {
-    fail("Usage: whetstone trace get <id>", 2);
+    fail("Usage: whetstone trace get <id> --agent <name>", 2);
+  }
+
+  if (!parsed.values.agent) {
+    const available = await formatAvailableAgents(parsed.values.cwd);
+    fail(`--agent <name> is required. Available agents: ${available}`, 2);
   }
 
   let result;
   try {
-    result = await runTraceGet(id, { cwd: parsed.values.cwd });
+    result = await runTraceGet(id, {
+      cwd: parsed.values.cwd,
+      agent: parsed.values.agent,
+    });
   } catch (err) {
     fail(err instanceof Error ? err.message : String(err), 2);
   }
@@ -264,6 +344,7 @@ async function runFmGetCommand(argv: string[]): Promise<void> {
     parsed = parseArgs({
       args: argv,
       options: {
+        agent: { type: "string", short: "a" },
         cwd: { type: "string", short: "C" },
         json: { type: "boolean", default: false },
         help: { type: "boolean", short: "h", default: false },
@@ -282,12 +363,20 @@ async function runFmGetCommand(argv: string[]): Promise<void> {
 
   const id = parsed.positionals[0];
   if (!id) {
-    fail("Usage: whetstone fm get <id>", 2);
+    fail("Usage: whetstone fm get <id> --agent <name>", 2);
+  }
+
+  if (!parsed.values.agent) {
+    const available = await formatAvailableAgents(parsed.values.cwd);
+    fail(`--agent <name> is required. Available agents: ${available}`, 2);
   }
 
   let result;
   try {
-    result = await runFmGet(id, { cwd: parsed.values.cwd });
+    result = await runFmGet(id, {
+      cwd: parsed.values.cwd,
+      agent: parsed.values.agent,
+    });
   } catch (err) {
     fail(err instanceof Error ? err.message : String(err), 2);
   }
@@ -305,6 +394,7 @@ async function runStatusCommand(argv: string[]): Promise<void> {
     parsed = parseArgs({
       args: argv,
       options: {
+        agent: { type: "string", short: "a" },
         cwd: { type: "string", short: "C" },
         json: { type: "boolean", default: false },
         help: { type: "boolean", short: "h", default: false },
@@ -321,9 +411,17 @@ async function runStatusCommand(argv: string[]): Promise<void> {
     return;
   }
 
+  if (!parsed.values.agent) {
+    const available = await formatAvailableAgents(parsed.values.cwd);
+    fail(`--agent <name> is required. Available agents: ${available}`, 2);
+  }
+
   let report;
   try {
-    report = await runStatus({ cwd: parsed.values.cwd });
+    report = await runStatus({
+      cwd: parsed.values.cwd,
+      agent: parsed.values.agent,
+    });
   } catch (err) {
     fail(err instanceof Error ? err.message : String(err), 2);
   }
@@ -331,6 +429,41 @@ async function runStatusCommand(argv: string[]): Promise<void> {
   const output = parsed.values.json
     ? statusReportJson(report)
     : statusReportText(report);
+  process.stdout.write(output);
+}
+
+async function runAgentsCommand(argv: string[]): Promise<void> {
+  let parsed;
+  try {
+    parsed = parseArgs({
+      args: argv,
+      options: {
+        cwd: { type: "string", short: "C" },
+        json: { type: "boolean", default: false },
+        help: { type: "boolean", short: "h", default: false },
+      },
+      allowPositionals: false,
+      strict: true,
+    });
+  } catch (err) {
+    fail((err as Error).message, 2);
+  }
+
+  if (parsed.values.help) {
+    process.stdout.write(AGENTS_USAGE);
+    return;
+  }
+
+  let report;
+  try {
+    report = await runAgents({ cwd: parsed.values.cwd });
+  } catch (err) {
+    fail(err instanceof Error ? err.message : String(err), 2);
+  }
+
+  const output = parsed.values.json
+    ? agentsReportJson(report)
+    : agentsReportText(report);
   process.stdout.write(output);
 }
 
@@ -352,6 +485,9 @@ async function main(): Promise<void> {
   switch (command) {
     case "init":
       await runInitCommand(rest);
+      return;
+    case "agents":
+      await runAgentsCommand(rest);
       return;
     case "validate":
       await runValidateCommand(rest);
