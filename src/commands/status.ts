@@ -1,6 +1,6 @@
 import { createReadStream } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
-import { isAbsolute, join, resolve } from "node:path";
+import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { styleText } from "node:util";
 
@@ -8,6 +8,7 @@ import {
   FailureModesFileSchema,
   type FailureMode,
 } from "../schemas/index.ts";
+import { resolveAgentRootForRead } from "./agent-root.ts";
 
 const LIFECYCLE_ORDER = [
   "discovered",
@@ -42,7 +43,7 @@ export interface StatusTraceFileSummary {
 }
 
 export interface StatusReport {
-  /** Absolute path to the whetstone/ root that was inspected. */
+  /** Absolute path to the `whetstone/<agent>/` root that was inspected. */
   rootPath: string;
   catalogue: {
     totalFailureModes: number;
@@ -62,6 +63,7 @@ export interface StatusReport {
 
 export interface StatusOptions {
   cwd?: string;
+  agent?: string;
 }
 
 interface PathInfo {
@@ -146,33 +148,17 @@ async function summariseTraceFile(
 export async function runStatus(
   options: StatusOptions = {},
 ): Promise<StatusReport> {
-  const cwdInput = options.cwd ?? process.cwd();
-  const cwdAbsolute = isAbsolute(cwdInput)
-    ? cwdInput
-    : resolve(process.cwd(), cwdInput);
-
-  const cwdInfo = await inspectPath(cwdAbsolute);
-  if (!cwdInfo.exists) {
-    throw new Error(`--cwd path does not exist: ${cwdAbsolute}`);
-  }
-  if (!cwdInfo.isDir) {
-    throw new Error(`--cwd path is not a directory: ${cwdAbsolute}`);
-  }
-
-  const rootPath = join(cwdAbsolute, "whetstone");
-  const rootInfo = await inspectPath(rootPath);
-  if (!rootInfo.exists || !rootInfo.isDir) {
-    throw new Error(
-      `whetstone/ directory not found at ${rootPath}. Run "whetstone init" to scaffold it.`,
-    );
-  }
+  const { rootPath, agentName } = await resolveAgentRootForRead({
+    cwd: options.cwd,
+    agent: options.agent,
+  });
 
   // Catalogue.
   const fmPath = join(rootPath, "failure_modes.json");
   const fmInfo = await inspectPath(fmPath);
   if (!fmInfo.exists || !fmInfo.isFile) {
     throw new Error(
-      `failure_modes.json is missing under ${rootPath}. Run "whetstone init" or "whetstone validate" to recover.`,
+      `failure_modes.json is missing under ${rootPath}. Run "whetstone init ${agentName}" or "whetstone validate --agent ${agentName}" to recover.`,
     );
   }
 
@@ -182,13 +168,13 @@ export async function runStatus(
     parsed = JSON.parse(raw);
   } catch (err) {
     throw new Error(
-      `failure_modes.json is not valid JSON (${(err as Error).message}). Run "whetstone validate" for details.`,
+      `failure_modes.json is not valid JSON (${(err as Error).message}). Run "whetstone validate --agent ${agentName}" for details.`,
     );
   }
   const result = FailureModesFileSchema.safeParse(parsed);
   if (!result.success) {
     throw new Error(
-      `failure_modes.json does not match the FailureModesFile schema. Run "whetstone validate" for the structured report.`,
+      `failure_modes.json does not match the FailureModesFile schema. Run "whetstone validate --agent ${agentName}" for the structured report.`,
     );
   }
 

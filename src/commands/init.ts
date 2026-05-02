@@ -1,6 +1,8 @@
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
-import { isAbsolute, join, resolve } from "node:path";
+import { join } from "node:path";
 import { styleText } from "node:util";
+
+import { resolveAgentRootForInit } from "./agent-root.ts";
 
 const TEMPLATE_PATH = join(
   import.meta.dirname,
@@ -20,10 +22,11 @@ export const SUBDIRS = ["traces", "failure_modes", "adapters"] as const;
 
 export interface InitOptions {
   cwd?: string;
+  agent?: string;
 }
 
 export interface InitResult {
-  /** Absolute path to the created `whetstone/` directory. */
+  /** Absolute path to the created `whetstone/<agent>/` directory. */
   rootPath: string;
   created: string[];
   skipped: string[];
@@ -57,25 +60,11 @@ async function writeIfMissing(
 }
 
 export async function runInit(options: InitOptions = {}): Promise<InitResult> {
-  const cwdInput = options.cwd ?? process.cwd();
-  const cwdAbsolute = isAbsolute(cwdInput)
-    ? cwdInput
-    : resolve(process.cwd(), cwdInput);
+  const { rootPath } = await resolveAgentRootForInit({
+    cwd: options.cwd,
+    agent: options.agent,
+  });
 
-  let cwdStat;
-  try {
-    cwdStat = await stat(cwdAbsolute);
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-      throw new Error(`--cwd path does not exist: ${cwdAbsolute}`);
-    }
-    throw err;
-  }
-  if (!cwdStat.isDirectory()) {
-    throw new Error(`--cwd path is not a directory: ${cwdAbsolute}`);
-  }
-
-  const rootPath = join(cwdAbsolute, "whetstone");
   const result: InitResult = { rootPath, created: [], skipped: [] };
 
   await mkdir(rootPath, { recursive: true });
