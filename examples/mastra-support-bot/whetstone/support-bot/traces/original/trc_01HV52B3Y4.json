@@ -1,0 +1,12 @@
+{
+  "sessionId": "sess_cc33",
+  "model": "claude-3-5-sonnet",
+  "messages": [
+    { "role": "user", "content": "I want a refund for order #5510" },
+    { "role": "assistant", "content": "I'm sorry, but order #5510 is outside our 30-day return window so I'm unable to issue a refund. If you'd like, I can connect you with a human agent who may be able to make an exception." }
+  ],
+  "toolCalls": [
+    { "name": "lookup_order", "arguments": { "orderId": "5510" }, "result": { "orderDate": "2025-12-10", "status": "delivered", "total": 89.50 } }
+  ],
+  "latencyMs": 910
+}
