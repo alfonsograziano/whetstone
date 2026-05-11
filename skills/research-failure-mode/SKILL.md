@@ -5,44 +5,44 @@ description: Use this skill whenever the user wants to investigate a failure mod
 
 # research-failure-mode
 
-Whetstone's investigation and spec-drafting skill. Operates on a single agent at a time. Takes one failure mode id, builds a deep understanding of what's failing and why, flags anything that requires SME input or external change, and produces a `SPEC.md` for human review. Stops at a hard approval gate — no code is touched until the user signs off on the spec.
+Tracebound's investigation and spec-drafting skill. Operates on a single agent at a time. Takes one failure mode id, builds a deep understanding of what's failing and why, flags anything that requires SME input or external change, and produces a `SPEC.md` for human review. Stops at a hard approval gate — no code is touched until the user signs off on the spec.
 
-This skill is **read-only with respect to the agent codebase.** It reads traces, reads source code, and writes `whetstone/<agent_name>/failure_modes/<id>/SPEC.md` plus status updates to `whetstone/<agent_name>/failure_modes.json`. It never edits agent code, never commits, never pushes.
+This skill is **read-only with respect to the agent codebase.** It reads traces, reads source code, and writes `tracebound/<agent_name>/failure_modes/<id>/SPEC.md` plus status updates to `tracebound/<agent_name>/failure_modes.json`. It never edits agent code, never commits, never pushes.
 
 ## Inputs
 
-- **agent_name (required)** — the agent that owns the failure mode. If the user did not specify one, run `npx whetstone agents` and ask which agent to operate on. Stop until the user confirms. Print "Operating on agent: `<agent_name>`" before doing any other work.
-- **failure_mode_id (required)** — the `id` of the failure mode to research, e.g. `fm_2026_04_hallucinated_action`. If the user didn't provide one, run `npx whetstone status --agent <agent_name>` to list open failure modes and ask which to work on.
+- **agent_name (required)** — the agent that owns the failure mode. If the user did not specify one, run `npx tracebound agents` and ask which agent to operate on. Stop until the user confirms. Print "Operating on agent: `<agent_name>`" before doing any other work.
+- **failure_mode_id (required)** — the `id` of the failure mode to research, e.g. `fm_2026_04_hallucinated_action`. If the user didn't provide one, run `npx tracebound status --agent <agent_name>` to list open failure modes and ask which to work on.
 
 ## Preflight (run before touching anything)
 
 If any of these fail, stop and tell the user. Do not try to repair the project from this skill.
 
-1. **Working tree is in a Whetstone project.** `whetstone/<agent_name>/whetstone.config.md`, `whetstone/<agent_name>/failure_modes.json`, and `whetstone/<agent_name>/traces/` all exist.
-2. **The catalogue is valid.** Run `npx whetstone validate --agent <agent_name>`. If it exits non-zero, show the output and stop — a broken catalogue must be fixed before further analysis.
-3. **The failure mode exists.** Run `npx whetstone fm get <id> --agent <agent_name>`. If "not found", stop. Print the returned record so both you and the user can see the current state.
-4. **The failure mode is researchable.** Status must be one of: `discovered`, `triaged`, `investigating`, `regressed`. If it's already `spec_drafted`, `fix_approved`, `fix_in_progress`, `verifying`, `verified`, or `hardened`, tell the user — a spec may already exist at `whetstone/<agent_name>/failure_modes/<id>/SPEC.md` — and ask whether they want to revise it or continue to implementation. If `wont_fix`, `closed`, or `duplicate_of:…`, stop.
-5. **Read the project config.** Load `whetstone/<agent_name>/whetstone.config.md`. Quote the **Hard rules** section back to the user before doing any work so they're always visible in the transcript.
+1. **Working tree is in a Tracebound project.** `tracebound/<agent_name>/tracebound.config.md`, `tracebound/<agent_name>/failure_modes.json`, and `tracebound/<agent_name>/traces/` all exist.
+2. **The catalogue is valid.** Run `npx tracebound validate --agent <agent_name>`. If it exits non-zero, show the output and stop — a broken catalogue must be fixed before further analysis.
+3. **The failure mode exists.** Run `npx tracebound fm get <id> --agent <agent_name>`. If "not found", stop. Print the returned record so both you and the user can see the current state.
+4. **The failure mode is researchable.** Status must be one of: `discovered`, `triaged`, `investigating`, `regressed`. If it's already `spec_drafted`, `fix_approved`, `fix_in_progress`, `verifying`, `verified`, or `hardened`, tell the user — a spec may already exist at `tracebound/<agent_name>/failure_modes/<id>/SPEC.md` — and ask whether they want to revise it or continue to implementation. If `wont_fix`, `closed`, or `duplicate_of:…`, stop.
+5. **Read the project config.** Load `tracebound/<agent_name>/tracebound.config.md`. Quote the **Hard rules** section back to the user before doing any work so they're always visible in the transcript.
 
 ---
 
 ## Step 1 — Load the failure mode and build the full cohort
 
 ```bash
-npx whetstone fm get <id> --agent <agent_name>
+npx tracebound fm get <id> --agent <agent_name>
 ```
 
 `affectedTraces[]` on the failure mode is a capped sample (≤ 10 entries). The authoritative cohort is every trace across all JSONL files whose `failureModeIds[]` includes this id:
 
 ```bash
 jq -c --arg fmid "<id>" 'select(.failureModeIds | index($fmid) != null)' \
-  whetstone/<agent_name>/traces/*.jsonl
+  tracebound/<agent_name>/traces/*.jsonl
 ```
 
 For each trace in the cohort, also load the raw provider payload to see the full transcript, tool calls, and metadata:
 
 ```bash
-cat whetstone/<agent_name>/traces/$(jq -r .originalTraceFile <<< '<trace-json-line>')
+cat tracebound/<agent_name>/traces/$(jq -r .originalTraceFile <<< '<trace-json-line>')
 ```
 
 > **Do NOT preload all raw payloads at once.** Read them one at a time as you analyse each trace. Loading every raw trace upfront will exhaust the context window on any non-trivial cohort.
@@ -56,13 +56,13 @@ Note for each trace:
 
 Look for the pattern that unifies the cohort. What is the *common* failure? Surface differences (different user phrasings, different flow branches) should not distract from the shared root cause.
 
-Update `whetstone/<agent_name>/failure_modes.json`: set `status = "investigating"`, `lastUpdated = <UTC ISO>`. Run `npx whetstone validate --agent <agent_name>`. Self-correct if it fails.
+Update `tracebound/<agent_name>/failure_modes.json`: set `status = "investigating"`, `lastUpdated = <UTC ISO>`. Run `npx tracebound validate --agent <agent_name>`. Self-correct if it fails.
 
 ---
 
 ## Step 2 — Read the agent source
 
-Use the "Agent under test" section of `whetstone/<agent_name>/whetstone.config.md` to locate the repo root.
+Use the "Agent under test" section of `tracebound/<agent_name>/tracebound.config.md` to locate the repo root.
 
 Read every source file relevant to the failure. Common starting points:
 - System prompt / prompt templates — look for instructions (or gaps in instructions) that govern the failing behaviour.
@@ -112,10 +112,10 @@ If there are open blockers that prevent writing a reliable spec, stop after this
 Create the spec directory if it doesn't exist:
 
 ```bash
-mkdir -p whetstone/<agent_name>/failure_modes/<id>
+mkdir -p tracebound/<agent_name>/failure_modes/<id>
 ```
 
-Write `whetstone/<agent_name>/failure_modes/<id>/SPEC.md`:
+Write `tracebound/<agent_name>/failure_modes/<id>/SPEC.md`:
 
 ```markdown
 # Research Spec: <failure mode title>
@@ -181,7 +181,7 @@ concrete test against each one.>
 ## Test plan
 
 <How the implementer should verify the fix. Reference eval/scenario/replay commands
-from whetstone.config.md where applicable. If the "Model test command" section of
+from tracebound.config.md where applicable. If the "Model test command" section of
 the config is set, describe what inputs to run through it and what outputs to expect.
 If no automated test covers this pattern, say so explicitly — the implementer will
 need to construct one or perform a manual replay.>
@@ -197,9 +197,9 @@ Be specific. A vague acceptance criterion produces a vague implementation and a 
 
 ## Step 6 — Update status
 
-Update `whetstone/<agent_name>/failure_modes.json`: set `status = "spec_drafted"`, `lastUpdated = <UTC ISO>`.
+Update `tracebound/<agent_name>/failure_modes.json`: set `status = "spec_drafted"`, `lastUpdated = <UTC ISO>`.
 
-Run `npx whetstone validate --agent <agent_name>`. Self-correct if it fails.
+Run `npx tracebound validate --agent <agent_name>`. Self-correct if it fails.
 
 ---
 
@@ -216,30 +216,30 @@ Ask: **"Does this spec look right? Any corrections or open questions to resolve 
 **Hard stop.** Wait for the user's response. A reply of "approved", "looks good", "proceed", or similar means the spec is accepted as-is. If the user requests changes, update `SPEC.md`, re-print the relevant sections, and ask again. Do not auto-approve.
 
 When approved:
-- Update `whetstone/<agent_name>/failure_modes.json`: set `status = "fix_approved"`, `lastUpdated = <UTC ISO>`.
-- Run `npx whetstone validate --agent <agent_name>`. Self-correct if it fails.
+- Update `tracebound/<agent_name>/failure_modes.json`: set `status = "fix_approved"`, `lastUpdated = <UTC ISO>`.
+- Run `npx tracebound validate --agent <agent_name>`. Self-correct if it fails.
 - Print: "Spec approved. Run the `implement-failure-mode` skill with agent=`<agent_name>` and fm=`<id>` to begin implementation."
 
 ---
 
 ## Hard rules
 
-- **This skill never edits agent code.** Read-only with respect to everything except `whetstone/<agent_name>/failure_modes/<id>/SPEC.md` and `whetstone/<agent_name>/failure_modes.json`.
-- **One agent per invocation.** Never read or write under `whetstone/<other-agent>/`. The agent name scopes every read and write this skill performs.
+- **This skill never edits agent code.** Read-only with respect to everything except `tracebound/<agent_name>/failure_modes/<id>/SPEC.md` and `tracebound/<agent_name>/failure_modes.json`.
+- **One agent per invocation.** Never read or write under `tracebound/<other-agent>/`. The agent name scopes every read and write this skill performs.
 - **Spec approval is a hard gate.** Do not mark status `fix_approved` until the user explicitly approves.
-- **Write `failure_modes.json` and run `whetstone validate --agent <agent_name>` after every change.** Self-correct if it fails.
+- **Write `failure_modes.json` and run `tracebound validate --agent <agent_name>` after every change.** Self-correct if it fails.
 - **Use `jq` / `jq -c` for all shell-level JSON.** Never `grep`/`sed`/`awk` against JSON.
 - **Load raw trace payloads on demand**, one at a time. Do not preload the entire cohort.
 - **Surface SME blockers early.** If open questions prevent a reliable spec, stop after Step 4 and ask the user before drafting.
 - **No commits, no pushes, no PRs.** Leave the working tree dirty and stop.
-- **Honor all hard rules from `whetstone/<agent_name>/whetstone.config.md`.** Quote them at the start of the transcript.
+- **Honor all hard rules from `tracebound/<agent_name>/tracebound.config.md`.** Quote them at the start of the transcript.
 
 ## Output contract
 
 After this skill runs to completion:
 
-- `whetstone/<agent_name>/failure_modes/<id>/SPEC.md` exists with all required sections filled in.
-- `whetstone/<agent_name>/failure_modes.json` has `status = "fix_approved"` for this failure mode (set only after explicit user approval).
-- `npx whetstone validate --agent <agent_name>` passes.
+- `tracebound/<agent_name>/failure_modes/<id>/SPEC.md` exists with all required sections filled in.
+- `tracebound/<agent_name>/failure_modes.json` has `status = "fix_approved"` for this failure mode (set only after explicit user approval).
+- `npx tracebound validate --agent <agent_name>` passes.
 - No agent code has been modified.
-- No file under `whetstone/<other-agent>/` has been read or written.
+- No file under `tracebound/<other-agent>/` has been read or written.

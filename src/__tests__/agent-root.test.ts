@@ -12,13 +12,13 @@ import {
 } from "../commands/agent-root.ts";
 
 async function makeTmp(): Promise<string> {
-  return await mkdtemp(join(tmpdir(), "whetstone-agent-root-"));
+  return await mkdtemp(join(tmpdir(), "tracebound-agent-root-"));
 }
 
 async function makeAgent(cwd: string, name: string): Promise<void> {
-  const dir = join(cwd, "whetstone", name);
+  const dir = join(cwd, "tracebound", name);
   await mkdir(dir, { recursive: true });
-  await writeFile(join(dir, "whetstone.config.md"), "# stub\n", "utf8");
+  await writeFile(join(dir, "tracebound.config.md"), "# stub\n", "utf8");
 }
 
 // ---------- AGENT_NAME_RE ----------
@@ -64,8 +64,8 @@ test("resolveAgentRootForInit returns paths even when the dir does not yet exist
   const r = await resolveAgentRootForInit({ cwd, agent: "fresh" });
 
   assert.equal(r.agentName, "fresh");
-  assert.equal(r.rootPath, join(cwd, "whetstone", "fresh"));
-  assert.equal(r.rootContainer, join(cwd, "whetstone"));
+  assert.equal(r.rootPath, join(cwd, "tracebound", "fresh"));
+  assert.equal(r.rootContainer, join(cwd, "tracebound"));
 });
 
 // ---------- resolveAgentRootForRead ----------
@@ -113,12 +113,12 @@ test("resolveAgentRootForRead returns a result for an existing agent", async (t)
 
   const r = await resolveAgentRootForRead({ cwd, agent: "alpha" });
   assert.equal(r.agentName, "alpha");
-  assert.equal(r.rootPath, join(cwd, "whetstone", "alpha"));
+  assert.equal(r.rootPath, join(cwd, "tracebound", "alpha"));
 });
 
 // ---------- listAgents ----------
 
-test("listAgents returns [] when whetstone/ is missing", async (t) => {
+test("listAgents returns [] when tracebound/ is missing", async (t) => {
   const cwd = await makeTmp();
   t.after(() => rm(cwd, { recursive: true, force: true }));
 
@@ -126,13 +126,13 @@ test("listAgents returns [] when whetstone/ is missing", async (t) => {
   assert.deepEqual(agents, []);
 });
 
-test("listAgents returns subdirs with whetstone.config.md, sorted alphabetically", async (t) => {
+test("listAgents returns subdirs with tracebound.config.md, sorted alphabetically", async (t) => {
   const cwd = await makeTmp();
   t.after(() => rm(cwd, { recursive: true, force: true }));
 
   await makeAgent(cwd, "zebra");
   await makeAgent(cwd, "apple");
-  await mkdir(join(cwd, "whetstone", "no-config"), { recursive: true });
+  await mkdir(join(cwd, "tracebound", "no-config"), { recursive: true });
 
   const agents = await listAgents(cwd);
   assert.deepEqual(

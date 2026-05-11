@@ -12,13 +12,13 @@ import {
 } from "../commands/status.ts";
 
 async function makeTmp(): Promise<string> {
-  return await mkdtemp(join(tmpdir(), "whetstone-status-"));
+  return await mkdtemp(join(tmpdir(), "tracebound-status-"));
 }
 
 const AGENT = "test-agent";
 
 function agentRoot(cwd: string, agent: string = AGENT): string {
-  return join(cwd, "whetstone", agent);
+  return join(cwd, "tracebound", agent);
 }
 
 interface FmShape {
@@ -236,7 +236,7 @@ test("malformed failure_modes.json throws with hint to validate", async (t) => {
     "utf8",
   );
 
-  await assert.rejects(runStatus({ cwd, agent: AGENT }), /whetstone validate/);
+  await assert.rejects(runStatus({ cwd, agent: AGENT }), /tracebound validate/);
 });
 
 test("schema-invalid failure_modes.json throws with hint to validate", async (t) => {
@@ -254,7 +254,7 @@ test("schema-invalid failure_modes.json throws with hint to validate", async (t)
     "utf8",
   );
 
-  await assert.rejects(runStatus({ cwd, agent: AGENT }), /whetstone validate/);
+  await assert.rejects(runStatus({ cwd, agent: AGENT }), /tracebound validate/);
 });
 
 test("text report mentions total, pending, and SPEC count", async (t) => {

@@ -8,34 +8,34 @@ import { runInit } from "../commands/init.ts";
 import { FailureModesFileSchema } from "../schemas/index.ts";
 
 async function makeTmpDir(): Promise<string> {
-  return await mkdtemp(join(tmpdir(), "whetstone-init-"));
+  return await mkdtemp(join(tmpdir(), "tracebound-init-"));
 }
 
 const AGENT = "test-agent";
 
-test("runInit creates the full whetstone/<agent>/ tree on a clean directory", async (t) => {
+test("runInit creates the full tracebound/<agent>/ tree on a clean directory", async (t) => {
   const cwd = await makeTmpDir();
   t.after(() => rm(cwd, { recursive: true, force: true }));
 
   const result = await runInit({ cwd, agent: AGENT });
 
-  assert.equal(result.rootPath, join(cwd, "whetstone", AGENT));
+  assert.equal(result.rootPath, join(cwd, "tracebound", AGENT));
   assert.equal(result.created.length, 2);
   assert.equal(result.skipped.length, 0);
 
   for (const sub of ["traces", "failure_modes", "adapters"]) {
-    const s = await stat(join(cwd, "whetstone", AGENT, sub));
+    const s = await stat(join(cwd, "tracebound", AGENT, sub));
     assert.equal(s.isDirectory(), true);
   }
 
   const configRaw = await readFile(
-    join(cwd, "whetstone", AGENT, "whetstone.config.md"),
+    join(cwd, "tracebound", AGENT, "tracebound.config.md"),
     "utf8",
   );
-  assert.match(configRaw, /^# Whetstone config/);
+  assert.match(configRaw, /^# Tracebound config/);
 
   const fmRaw = await readFile(
-    join(cwd, "whetstone", AGENT, "failure_modes.json"),
+    join(cwd, "tracebound", AGENT, "failure_modes.json"),
     "utf8",
   );
   const fmParsed = JSON.parse(fmRaw);
@@ -55,7 +55,7 @@ test("runInit is idempotent: re-running reports every file as skipped", async (t
 });
 
 test("runInit rejects --cwd that does not exist", async () => {
-  const missing = join(tmpdir(), `whetstone-missing-${process.pid}-${Date.now()}`);
+  const missing = join(tmpdir(), `tracebound-missing-${process.pid}-${Date.now()}`);
   await assert.rejects(
     () => runInit({ cwd: missing, agent: AGENT }),
     /does not exist/,
@@ -79,7 +79,7 @@ test("runInit preserves user-edited files on re-run", async (t) => {
   t.after(() => rm(cwd, { recursive: true, force: true }));
 
   await runInit({ cwd, agent: AGENT });
-  const fmPath = join(cwd, "whetstone", AGENT, "failure_modes.json");
+  const fmPath = join(cwd, "tracebound", AGENT, "failure_modes.json");
   const userContent = `${JSON.stringify(
     { failureModes: [{ touched: "by user" }] },
     null,
@@ -112,11 +112,11 @@ test("runInit rejects an invalid agent name and creates no files", async (t) => 
     /invalid agent name/,
   );
 
-  // Confirm nothing was written under whetstone/.
+  // Confirm nothing was written under tracebound/.
   const containerInfo = await stat(join(cwd)).catch(() => null);
   assert.ok(containerInfo);
   await assert.rejects(
-    () => stat(join(cwd, "whetstone")),
+    () => stat(join(cwd, "tracebound")),
     /ENOENT/,
   );
 });
@@ -126,7 +126,7 @@ test("runInit accepts hyphens, underscores, and digits in the agent name", async
   t.after(() => rm(cwd, { recursive: true, force: true }));
 
   await runInit({ cwd, agent: "agent-1_v2" });
-  const s = await stat(join(cwd, "whetstone", "agent-1_v2", "whetstone.config.md"));
+  const s = await stat(join(cwd, "tracebound", "agent-1_v2", "tracebound.config.md"));
   assert.equal(s.isFile(), true);
 });
 
@@ -138,11 +138,11 @@ test("two different agent names produce independent sibling directories", async 
   await runInit({ cwd, agent: "agent-b" });
 
   // Mutating one should not affect the other.
-  const aFm = join(cwd, "whetstone", "agent-a", "failure_modes.json");
+  const aFm = join(cwd, "tracebound", "agent-a", "failure_modes.json");
   await writeFile(aFm, `${JSON.stringify({ failureModes: [{ marker: "a" }] }, null, 2)}\n`);
 
   const bFmRaw = await readFile(
-    join(cwd, "whetstone", "agent-b", "failure_modes.json"),
+    join(cwd, "tracebound", "agent-b", "failure_modes.json"),
     "utf8",
   );
   assert.deepEqual(JSON.parse(bFmRaw), { failureModes: [] });

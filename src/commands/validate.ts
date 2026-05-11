@@ -30,7 +30,7 @@ export interface ValidationIssue {
 
 export interface ValidationReport {
   ok: boolean;
-  /** Absolute path to the `whetstone/<agent>/` root that was inspected. */
+  /** Absolute path to the `tracebound/<agent>/` root that was inspected. */
   rootPath: string;
   summary: {
     fileCount: number;
@@ -44,7 +44,7 @@ export interface ValidateOptions {
   agent?: string;
 }
 
-const REQUIRED_FILES = ["whetstone.config.md", "failure_modes.json"] as const;
+const REQUIRED_FILES = ["tracebound.config.md", "failure_modes.json"] as const;
 
 interface PathInfo {
   exists: boolean;
@@ -194,8 +194,8 @@ export async function runValidate(
         code: "WHET_STRUCT_MISSING",
         severity: "error",
         file: f,
-        message: `Required file is missing: whetstone/${agentName}/${f}.`,
-        hint: `Run "whetstone init ${agentName}" to recreate it (existing files are preserved).`,
+        message: `Required file is missing: tracebound/${agentName}/${f}.`,
+        hint: `Run "tracebound init ${agentName}" to recreate it (existing files are preserved).`,
       });
     }
   }
@@ -207,8 +207,8 @@ export async function runValidate(
         code: "WHET_STRUCT_MISSING",
         severity: "error",
         file: `${sub}/`,
-        message: `Required subdirectory is missing: whetstone/${agentName}/${sub}/.`,
-        hint: `Run "whetstone init ${agentName}" to recreate it.`,
+        message: `Required subdirectory is missing: tracebound/${agentName}/${sub}/.`,
+        hint: `Run "tracebound init ${agentName}" to recreate it.`,
       });
     }
   }

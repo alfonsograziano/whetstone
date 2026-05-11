@@ -25,7 +25,7 @@ async function pathExists(p: string): Promise<boolean> {
 }
 
 /**
- * Look up a single failure mode by id in `whetstone/<agent>/failure_modes.json`.
+ * Look up a single failure mode by id in `tracebound/<agent>/failure_modes.json`.
  */
 export async function runFmGet(
   id: string,
@@ -43,7 +43,7 @@ export async function runFmGet(
   const fmPath = join(rootPath, "failure_modes.json");
   if (!(await pathExists(fmPath))) {
     throw new Error(
-      `failure_modes.json not found at ${fmPath}. Run "whetstone init ${agentName}" first.`,
+      `failure_modes.json not found at ${fmPath}. Run "tracebound init ${agentName}" first.`,
     );
   }
 
@@ -68,7 +68,7 @@ export async function runFmGet(
   const result = FailureModesFileSchema.safeParse(parsed);
   if (!result.success) {
     throw new Error(
-      `failure_modes.json does not match the expected schema. Run "whetstone validate --agent ${agentName}" for details.`,
+      `failure_modes.json does not match the expected schema. Run "tracebound validate --agent ${agentName}" for details.`,
     );
   }
 

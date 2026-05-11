@@ -1,48 +1,45 @@
-# Whetstone
+# Tracebound
 
-![Whetstone](public/hero.png)
+![Tracebound](public/hero.png)
 
-**Whetstone closes the loop between your LLM agent in production and the next fix you ship.**
+**Tracebound closes the loop between your LLM agent in production and the next fix you ship.**
 
 ## The problem
 
 Teams ship LLM agents and then operate them blind. Telemetry is collected but rarely closed back into the development loop. Failure modes get discovered ad-hoc, usually by one engineer scrolling Langfuse on a Friday afternoon. Fixes are one-off, and rarely regression-tested against the trace that motivated them. Expensive SME review effort gets thrown away after a single Slack comment.
 
-## What Whetstone does
+## What Tracebound does
 
-Whetstone ingests production traces from any telemetry source, harvests feedback from users and subject-matter experts, and clusters recurring failures into a persistent, versioned catalogue that lives as a diffable file in your repo. For every failure mode, a coding agent drafts a fix spec you review *before* code is touched, implements the change in your working tree, and replays the original failing cohort against the patched agent to confirm the fix actually worked. Every state transition is human-reviewed; nothing gets committed, pushed, or merged without you.
+Tracebound ingests production traces from any telemetry source, harvests feedback from users and subject-matter experts, and clusters recurring failures into a persistent, versioned catalogue that lives as a diffable file in your repo. For every failure mode, a coding agent drafts a fix spec you review *before* code is touched, implements the change in your working tree, and replays the original failing cohort against the patched agent to confirm the fix actually worked. Every state transition is human-reviewed; nothing gets committed, pushed, or merged without you.
 
 ```
 ingest traces → extract feedback → cluster failure modes → propose fix → verify → (optionally) harden
 ```
 
-Whetstone is opinionated about the *workflow* and agnostic about the telemetry source, feedback signal, agent framework, and test infrastructure.
+Tracebound is opinionated about the *workflow* and agnostic about the telemetry source, feedback signal, agent framework, and test infrastructure.
 
 ---
 
 ## How it works
 
-![How it works](public/how-it-works.png)
-
-
-Whetstone has two parts:
+Tracebound has two parts:
 
 - **A CLI** — deterministic primitives: scaffold, validate, query. Stateless, fast, used as a subroutine by the skills and by you.
 - **Agent skills** — LLM-driven judgment work. Each skill is a `.md` file that an AI coding agent (e.g. GitHub Copilot, Cursor, Claude) reads and follows. Skills call the CLI as a subroutine.
 
-Everything lives as diffable files in your repo under a `whetstone/` folder. No server, no database.
+Everything lives as diffable files in your repo under a `tracebound/` folder. No server, no database.
 
 ---
 ## Installation
 
 ```bash
-npm install -g @whetstone/cli
+npm install -g @tracebound/cli
 ```
 
 Or use without installing:
 
 ```bash
-npx @whetstone/cli <command>
+npx @tracebound/cli <command>
 ```
 
 ---
@@ -51,29 +48,29 @@ npx @whetstone/cli <command>
 
 ### 1. Scaffold your project
 
-Run this inside the repo that contains your agent. Pick a name for the agent — Whetstone scopes everything by it, so a single repo can track multiple agents side by side:
+Run this inside the repo that contains your agent. Pick a name for the agent — Tracebound scopes everything by it, so a single repo can track multiple agents side by side:
 
 ```bash
-whetstone init support-bot
+tracebound init support-bot
 ```
 
 This creates:
 
 ```
-whetstone/
+tracebound/
 └── support-bot/
-    ├── whetstone.config.md      # edit this first
+    ├── tracebound.config.md      # edit this first
     ├── failure_modes.json       # starts empty
     ├── traces/                  # drop JSONL files here
     ├── failure_modes/           # one folder per failure mode
     └── adapters/                # converter scripts go here
 ```
 
-Run `whetstone init <other-agent>` again to track a second agent. List the configured agents at any time with `whetstone agents`.
+Run `tracebound init <other-agent>` again to track a second agent. List the configured agents at any time with `tracebound agents`.
 
 ### 2. Configure the project
 
-Edit `whetstone/support-bot/whetstone.config.md`. At minimum fill in:
+Edit `tracebound/support-bot/tracebound.config.md`. At minimum fill in:
 
 - **Agent under test** — repo root, entry point, framework.
 - **Sanity checks** — `npm run typecheck`, `npm run lint`, `npm test`, or whatever your project uses.
@@ -82,11 +79,11 @@ Edit `whetstone/support-bot/whetstone.config.md`. At minimum fill in:
 
 ### 3. Import traces
 
-Write or generate an adapter script under `whetstone/support-bot/adapters/` that reads your telemetry provider's export and writes Whetstone-format JSONL to `whetstone/support-bot/traces/`.
+Write or generate an adapter script under `tracebound/support-bot/adapters/` that reads your telemetry provider's export and writes Tracebound-format JSONL to `tracebound/support-bot/traces/`.
 
 The `create-adapter` skill can generate this script from a sample of your data:
 
-> "Create a Whetstone adapter for this Langfuse JSON export: `<paste sample>`"
+> "Create a Tracebound adapter for this Langfuse JSON export: `<paste sample>`"
 
 Each line in the output JSONL is a **Trace**:
 
@@ -106,7 +103,7 @@ Each line in the output JSONL is a **Trace**:
 
 Point the `analyze-traces` skill at a trace file (always under one agent):
 
-> "Run analyze-traces for support-bot on `whetstone/support-bot/traces/langfuse-2026-04-26.jsonl`"
+> "Run analyze-traces for support-bot on `tracebound/support-bot/traces/langfuse-2026-04-26.jsonl`"
 
 The skill processes negatively-signalled traces in configurable batches, clusters them into failure modes, writes `failure_modes.json`, and validates after every batch. It self-corrects on validation errors.
 
@@ -135,7 +132,7 @@ Hand an agent and a failure mode id to the `research-failure-mode` skill:
 
 > "Research fm_2026_04_hallucinated_action for support-bot"
 
-The skill reads the cohort, reads the agent source, forms hypotheses, then writes `whetstone/support-bot/failure_modes/fm_2026_04_hallucinated_action/SPEC.md` — a structured fix spec with root cause, proposed changes, acceptance criteria, and a test plan.
+The skill reads the cohort, reads the agent source, forms hypotheses, then writes `tracebound/support-bot/failure_modes/fm_2026_04_hallucinated_action/SPEC.md` — a structured fix spec with root cause, proposed changes, acceptance criteria, and a test plan.
 
 **You review the spec before any code is touched.** When you're happy, tell the skill to mark it approved (or edit `status` in `failure_modes.json` yourself to `fix_approved`).
 
@@ -150,12 +147,12 @@ The `implement-failure-mode` skill reads the approved spec, writes a `PLAN.md`, 
 ## CLI reference
 
 ```
-whetstone <command> [options]
+tracebound <command> [options]
 
 Commands:
-  init <agent-name>    Scaffold whetstone/<agent-name>/ in the current repo.
-  agents               List the agents configured under whetstone/.
-  validate             Validate one agent's whetstone/<agent>/ tree.
+  init <agent-name>    Scaffold tracebound/<agent-name>/ in the current repo.
+  agents               List the agents configured under tracebound/.
+  validate             Validate one agent's tracebound/<agent>/ tree.
   status               Print catalogue health for one agent.
   trace get <id>       Find a trace by id within one agent.
   fm get <id>          Print a failure mode by id within one agent.
@@ -165,11 +162,11 @@ Global options:
   -v, --version        Print the CLI version.
 ```
 
-Every command except `init` and `agents` requires `--agent <name>` (alias `-a`). Without it, the command exits 2 and prints the list of agents currently configured under `whetstone/`.
+Every command except `init` and `agents` requires `--agent <name>` (alias `-a`). Without it, the command exits 2 and prints the list of agents currently configured under `tracebound/`.
 
-### `whetstone init <agent-name>`
+### `tracebound init <agent-name>`
 
-Scaffolds `whetstone/<agent-name>/`. Pre-existing files are left untouched. Agent names must match `^[a-z0-9][a-z0-9_-]*$` (lowercase letters, digits, underscores, hyphens; must start with a letter or digit).
+Scaffolds `tracebound/<agent-name>/`. Pre-existing files are left untouched. Agent names must match `^[a-z0-9][a-z0-9_-]*$` (lowercase letters, digits, underscores, hyphens; must start with a letter or digit).
 
 ```
 Positionals:
@@ -179,9 +176,9 @@ Options:
   -C, --cwd <path>   Directory to initialise inside (default: cwd)
 ```
 
-### `whetstone agents`
+### `tracebound agents`
 
-Lists every subdirectory of `whetstone/` that contains a `whetstone.config.md` file (sorted alphabetically). Exits 0 even when no agents are configured.
+Lists every subdirectory of `tracebound/` that contains a `tracebound.config.md` file (sorted alphabetically). Exits 0 even when no agents are configured.
 
 ```
 Options:
@@ -193,11 +190,11 @@ Exit codes:
   2   could not run
 ```
 
-### `whetstone validate`
+### `tracebound validate`
 
 Checks structure, schemas, and invariants for one agent:
 
-- Required files and folders exist (`whetstone.config.md`, `failure_modes.json`, `traces/`, `failure_modes/`, `adapters/`).
+- Required files and folders exist (`tracebound.config.md`, `failure_modes.json`, `traces/`, `failure_modes/`, `adapters/`).
 - `failure_modes.json` parses against the `FailureModesFile` schema.
 - Every `traces/*.jsonl` line parses against the `Trace` schema.
 - Failure mode ids are unique.
@@ -217,7 +214,7 @@ Exit codes:
   2   could not run (IO error, missing or unknown --agent)
 ```
 
-### `whetstone status`
+### `tracebound status`
 
 Prints catalogue health for one agent: failure-mode counts by lifecycle status, recently updated failure modes, specs awaiting approval, and per-file trace counts.
 
@@ -232,7 +229,7 @@ Exit codes:
   2   could not run
 ```
 
-### `whetstone trace get <id>`
+### `tracebound trace get <id>`
 
 Scans all `traces/*.jsonl` files for one agent and prints the first trace whose `id` matches.
 
@@ -248,7 +245,7 @@ Exit codes:
   2   could not run
 ```
 
-### `whetstone fm get <id>`
+### `tracebound fm get <id>`
 
 Looks up a failure mode by id in one agent's `failure_modes.json` and prints it.
 
@@ -270,7 +267,7 @@ Exit codes:
 
 Skills are instruction files for your AI coding agent. Drop the `skills/` folder into your agent's context or reference individual files.
 
-Every skill takes the agent name as a required input — pass it explicitly in the trigger phrase (e.g. "for support-bot") or the skill will run `whetstone agents` and ask which one.
+Every skill takes the agent name as a required input — pass it explicitly in the trigger phrase (e.g. "for support-bot") or the skill will run `tracebound agents` and ask which one.
 
 | Skill | Trigger phrase | What it does |
 |---|---|---|
@@ -280,8 +277,8 @@ Every skill takes the agent name as a required input — pass it explicitly in t
 | `create-adapter` | "Create an adapter for support-bot from this Langfuse export" | Generates a converter script (per-agent) from a sample of your telemetry data. |
 
 All skills:
-- Run `whetstone validate --agent <name>` as a preflight check and refuse to proceed on a broken catalogue.
-- Quote the **Hard rules** from `whetstone/<agent>/whetstone.config.md` before doing any work.
+- Run `tracebound validate --agent <name>` as a preflight check and refuse to proceed on a broken catalogue.
+- Quote the **Hard rules** from `tracebound/<agent>/tracebound.config.md` before doing any work.
 - Operate on one agent at a time — they never read or write under another agent's directory.
 - Never commit, push, or open PRs — they leave the working tree ready and stop.
 

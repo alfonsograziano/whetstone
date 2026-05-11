@@ -1,7 +1,7 @@
-# Whetstone config
+# Tracebound config
 
 <!--
-This file teaches Whetstone the project specifics every skill needs to do its job.
+This file teaches Tracebound the project specifics every skill needs to do its job.
 It is read by every skill before it acts. Edit freely; commit it like any other doc.
 -->
 
@@ -65,7 +65,7 @@ whether to proceed with sanity-checks-only verification.
 
 <!--
 - Never modify `agent/src/payments/**` without a human in the loop.
-- Never push to `main`. Always work on `whetstone/<failure_mode_id>` branches.
+- Never push to `main`. Always work on `tracebound/<failure_mode_id>` branches.
 - Redact PII before committing trace fixtures.
 - For any shell-level JSON manipulation (reading, filtering, slicing files under `traces/` or `failure_modes.json`), use `jq` — never `grep`/`sed`/`awk` against JSON.
 -->

@@ -1,4 +1,4 @@
-# Whetstone — Product Requirements Document
+# Tracebound — Product Requirements Document
 
 **Status:** Draft v0.1
 **Owner:** Alfonso Graziano
@@ -8,7 +8,7 @@
 
 ## 1. Summary
 
-**Whetstone** is a semi-automatic improvement loop for LLM-based agents. It ingests live production traces from any telemetry provider, harvests feedback (user signals + subject‑matter‑expert annotations), uses a coding agent to discover and maintain a catalogue of **failure modes**, then proposes, implements, and *verifies* fixes against the agent under test.
+**Tracebound** is a semi-automatic improvement loop for LLM-based agents. It ingests live production traces from any telemetry provider, harvests feedback (user signals + subject‑matter‑expert annotations), uses a coding agent to discover and maintain a catalogue of **failure modes**, then proposes, implements, and *verifies* fixes against the agent under test.
 
 The end state is a closed loop:
 
@@ -24,12 +24,12 @@ flowchart LR
     G -. drift .-> C
 ```
 
-Whetstone is opinionated about the *workflow*, but **agnostic about**:
+Tracebound is opinionated about the *workflow*, but **agnostic about**:
 
 - the telemetry source (Langfuse, LangSmith, Maxim/MaxDraw, Phoenix, raw OTel, custom JSON dumps)
 - the feedback signal (thumbs, comments, ratings, behavioural signals like clicks / conversation length / regenerations / abandonment, SME rubrics)
 - the agent under test (any HTTP-callable agent, CLI agent, or codebase the coding agent can edit)
-- how fixes are tested (the user provides CLI tools via a Markdown config; Whetstone just orchestrates them)
+- how fixes are tested (the user provides CLI tools via a Markdown config; Tracebound just orchestrates them)
 
 ---
 
@@ -42,7 +42,7 @@ Teams ship LLM agents and then operate them blind:
 - Fixes are one-off and rarely regression-tested against the trace that motivated them.
 - SME review effort is expensive and gets thrown away after a single Slack comment.
 
-Whetstone turns "looking at traces" into a structured, persistent artifact (`failure_modes.json`) that a coding agent can act on, and turns "did the fix work?" into a runnable check.
+Tracebound turns "looking at traces" into a structured, persistent artifact (`failure_modes.json`) that a coding agent can act on, and turns "did the fix work?" into a runnable check.
 
 ---
 
@@ -64,13 +64,13 @@ Whetstone turns "looking at traces" into a structured, persistent artifact (`fai
 - Real-time/online learning or RLHF-style fine-tuning.
 - Replacing the telemetry vendor — we *read from* it.
 - Hosting / running the agent under test. The user owns the agent process.
-- **Auto-creating commits, pushes, or PRs.** Skills edit files and run tests; they leave the working tree ready and stop. The user decides when (and whether) to commit, push, or open a PR. Whetstone never reaches into shared state on its own.
+- **Auto-creating commits, pushes, or PRs.** Skills edit files and run tests; they leave the working tree ready and stop. The user decides when (and whether) to commit, push, or open a PR. Tracebound never reaches into shared state on its own.
 
 ---
 
 ## 4. Personas
 
-| Persona | What they do in Whetstone |
+| Persona | What they do in Tracebound |
 |---|---|
 | **Agent engineer** | Owns the agent codebase. Reviews failure modes, approves fix specs, merges PRs. |
 | **SME / annotator** | Reviews a sampled slice of live traffic and writes structured annotations. Never touches code. |
@@ -176,13 +176,13 @@ The point of the split: the fix work demonstrates that the bug is solved *today*
 
 ## 6. System architecture
 
-Whetstone ships as **skills + a small CLI + a directory of artifacts**. No server, no DB in v1.
+Tracebound ships as **skills + a small CLI + a directory of artifacts**. No server, no DB in v1.
 
 The three layers split along a clear seam: **skills** do the LLM-driven judgment work (analyze, fix, harden); the **CLI** does the deterministic plumbing (init, validate, query); the **artifacts** are the data, living in the agent's repo as diffable, reviewable files. Skills call the CLI as a subroutine; the user calls either directly.
 
 ```
-whetstone/
-├── whetstone.config.md            # human-authored config (eval commands, replay cmd, hard rules, …)
+tracebound/
+├── tracebound.config.md            # human-authored config (eval commands, replay cmd, hard rules, …)
 ├── traces/                        # one immutable JSONL file per ingest run; pick one to analyze
 │   ├── langfuse-2026-04-26.jsonl
 │   ├── langfuse-2026-04-27.jsonl
@@ -199,45 +199,45 @@ whetstone/
 │   ├── otel.ts
 │   └── ...
 ├── skills/                        # skills (markdown), portable across coding assistants
-│   ├── whetstone.md               # entry-point: orientation + interactive --help
+│   ├── tracebound.md               # entry-point: orientation + interactive --help
 │   ├── ingest-traces.md           # wraps the adapter scripts
 │   ├── analyze-traces.md
 │   ├── fix-failure-mode.md
 │   ├── verify-failure-mode.md
 │   ├── harden.md                  # optional: golden + scorers proposer
 │   └── status.md                  # read-only catalogue summary
-└── .whetstone/
+└── .tracebound/
     └── cursors.json               # per-adapter ingest checkpoints
 ```
 
 ### 6.1 Skills (LLM judgment work)
 
-Each pipeline stage that requires reading transcripts, classifying, drafting, or proposing is a skill the user invokes from their favorite coding assistant. The skill reads `whetstone.config.md`, knows where the artifacts live, and shells out both to user-owned scripts (adapters, eval commands, replay) and to the Whetstone CLI (validate, init, query).
+Each pipeline stage that requires reading transcripts, classifying, drafting, or proposing is a skill the user invokes from their favorite coding assistant. The skill reads `tracebound.config.md`, knows where the artifacts live, and shells out both to user-owned scripts (adapters, eval commands, replay) and to the Tracebound CLI (validate, init, query).
 
 | Stage | Skill | What it does |
 |---|---|---|
-| Entry | `whetstone` | Orientation + interactive `--help`. Detects whether the project is initialized (offers `whetstone init` if not), runs `whetstone validate` as a health check, then prints catalogue state, the workflow map, and the next likely step. Read-only after init. |
+| Entry | `tracebound` | Orientation + interactive `--help`. Detects whether the project is initialized (offers `tracebound init` if not), runs `tracebound validate` as a health check, then prints catalogue state, the workflow map, and the next likely step. Read-only after init. |
 | Ingest | `ingest-traces` | Calls the configured adapter script (e.g. `node adapters/langfuse.ts`) and writes a new JSONL file under `traces/`. |
-| Analyze | `analyze-traces` | Takes one file under `traces/` as input. Batches pending traces, classifies into failure modes, updates the input file and `failure_modes.json` via `jq`. Runs `whetstone validate` after every write. |
+| Analyze | `analyze-traces` | Takes one file under `traces/` as input. Batches pending traces, classifies into failure modes, updates the input file and `failure_modes.json` via `jq`. Runs `tracebound validate` after every write. |
 | Fix | `fix-failure-mode` | Research → spec → plan → implement → verify, all in the working tree. |
 | Verify | `verify-failure-mode` | Runs the failure mode's `tests[]` and updates `metrics`. Standalone variant of the fix skill's verify phase. |
 | Harden | `harden` *(optional)* | Proposes golden + scorers for a `verified` failure mode. |
 
 ### 6.2 CLI (deterministic primitives)
 
-The CLI is a small Node/TypeScript binary distributed as an npm package (`npm i -D @whetstone/cli` → `npx whetstone …`). Its scope is **deterministic, scriptable operations** — anything that doesn't need an LLM in the loop. It is **mostly invoked by skills**, occasionally by the user directly. Schema validation uses `zod`.
+The CLI is a small Node/TypeScript binary distributed as an npm package (`npm i -D @tracebound/cli` → `npx tracebound …`). Its scope is **deterministic, scriptable operations** — anything that doesn't need an LLM in the loop. It is **mostly invoked by skills**, occasionally by the user directly. Schema validation uses `zod`.
 
 | Command | Purpose |
 |---|---|
-| `whetstone init` | Scaffolds the project: creates `whetstone.config.md` from a template, an empty `failure_modes.json`, and the `traces/`, `failure_modes/`, `adapters/`, `skills/`, `.whetstone/` directories. Idempotent — safe to re-run. |
-| `whetstone validate` | Validates `failure_modes.json` and every file under `traces/` against zod schemas, plus the cross-file invariants from §7.2 (bidirectional links, unique ids, `evidence.trace_count` matches reality, `regression_net` only on FMs that reached `verified`). Exit code 0 on pass, non-zero with a structured report on failure. Skills run it after every write. |
-| `whetstone status` | Prints catalogue health: counts by status (open / verifying / verified / hardened / regressed), recently changed FMs, open SPECs awaiting approval. JSON output via `--json` for skill consumption. |
-| `whetstone trace get <id>` | Finds a trace by id across all files under `traces/` and prints it. Cohort-building primitive used by the harden and fix skills. |
-| `whetstone fm get <id>` | Prints a single failure-mode entry from `failure_modes.json`. |
+| `tracebound init` | Scaffolds the project: creates `tracebound.config.md` from a template, an empty `failure_modes.json`, and the `traces/`, `failure_modes/`, `adapters/`, `skills/`, `.tracebound/` directories. Idempotent — safe to re-run. |
+| `tracebound validate` | Validates `failure_modes.json` and every file under `traces/` against zod schemas, plus the cross-file invariants from §7.2 (bidirectional links, unique ids, `evidence.trace_count` matches reality, `regression_net` only on FMs that reached `verified`). Exit code 0 on pass, non-zero with a structured report on failure. Skills run it after every write. |
+| `tracebound status` | Prints catalogue health: counts by status (open / verifying / verified / hardened / regressed), recently changed FMs, open SPECs awaiting approval. JSON output via `--json` for skill consumption. |
+| `tracebound trace get <id>` | Finds a trace by id across all files under `traces/` and prints it. Cohort-building primitive used by the harden and fix skills. |
+| `tracebound fm get <id>` | Prints a single failure-mode entry from `failure_modes.json`. |
 
-**Future CLI candidates** (v1.x, not v1): `whetstone migrate` (schema migrations), `whetstone fm new <title>` (skeleton creator), `whetstone trace ls --filter <expr>`, `whetstone lock` / `unlock` (concurrency).
+**Future CLI candidates** (v1.x, not v1): `tracebound migrate` (schema migrations), `tracebound fm new <title>` (skeleton creator), `tracebound trace ls --filter <expr>`, `tracebound lock` / `unlock` (concurrency).
 
-**What the CLI deliberately does *not* do.** It does not analyze traces, classify failures, propose fixes, or write SPECs — those are LLM judgment calls and live in skills. The CLI never edits user code; it only touches Whetstone's own artifacts. It never opens commits, pushes, or PRs (consistent with §3 non-goals).
+**What the CLI deliberately does *not* do.** It does not analyze traces, classify failures, propose fixes, or write SPECs — those are LLM judgment calls and live in skills. The CLI never edits user code; it only touches Tracebound's own artifacts. It never opens commits, pushes, or PRs (consistent with §3 non-goals).
 
 ### 6.3 Artifacts (the data)
 
@@ -290,7 +290,7 @@ Adapters (HTTP pagination, auth, dedup, provider-specific quirks) live as small 
 **Notes on the shape:**
 
 - `input` and `output` are natural-language strings — the headline signals. They keep the catalogue and skill prompts compact.
-- `originalTrace` is the **verbatim provider payload** (any JSON shape). When a skill needs the full transcript, tool calls, prompts, latency, etc., it reads from here. Keeping it as opaque `unknown` means Whetstone doesn't care about provider-specific differences — adapters don't have to lossily flatten anything.
+- `originalTrace` is the **verbatim provider payload** (any JSON shape). When a skill needs the full transcript, tool calls, prompts, latency, etc., it reads from here. Keeping it as opaque `unknown` means Tracebound doesn't care about provider-specific differences — adapters don't have to lossily flatten anything.
 - `feedback[]` is the **single channel** for all signals. Each entry is `{ sentiment, source, comment }`, all three required:
   - `sentiment ∈ { "positive", "negative" }`
   - `source ∈ { "user", "sme", "other" }` — `"other"` covers implicit / behavioural / system-derived signals.
@@ -356,7 +356,7 @@ stateDiagram-v2
 
 Both `verified` and `hardened` are valid terminal states. `wont_fix`, `duplicate_of:<id>`, and `closed` are also terminal. `hardening` and `hardened` are only reached if the user opts into the `harden` skill (§9.4).
 
-**Key invariants** (enforced by `whetstone validate`, which skills run after every write to the catalogue or trace files):
+**Key invariants** (enforced by `tracebound validate`, which skills run after every write to the catalogue or trace files):
 
 - No two failure modes share the same `id`.
 - For every `affectedTraces[]` entry, the file `traces/<filename>` exists and contains a record with that `traceId` (lookup: `jq -c 'select(.id=="…")' traces/<filename>`).
@@ -365,14 +365,14 @@ Both `verified` and `hardened` are valid terminal states. `wont_fix`, `duplicate
 
 ---
 
-## 8. Configuration: `whetstone.config.md`
+## 8. Configuration: `tracebound.config.md`
 
 A single Markdown file the user owns. The agent reads it before *every* skill invocation. Markdown (not JSON/YAML) because (a) it's mostly prose explaining tools to an LLM, and (b) it's diffable and reviewable like any other doc.
 
 Suggested sections:
 
 ```markdown
-# Whetstone config
+# Tracebound config
 
 ## Agent under test
 - Name: support-bot
@@ -401,7 +401,7 @@ Suggested sections:
 
 ## Hard rules
 - Never modify `agent/src/payments/**` without a human in the loop.
-- Never push to `main`. Always work on `whetstone/<failure_mode_id>` branches.
+- Never push to `main`. Always work on `tracebound/<failure_mode_id>` branches.
 - Redact PII before committing trace fixtures.
 - For any shell-level JSON manipulation (reading, filtering, slicing files under `traces/` or `failure_modes.json`), use `jq` — never `grep`/`sed`/`awk` against JSON.
 
@@ -410,47 +410,47 @@ Suggested sections:
 - max batches per `analyze-traces` invocation: 10
 ```
 
-This file is the **only** place the user has to teach Whetstone project specifics. Skills load it as context.
+This file is the **only** place the user has to teach Tracebound project specifics. Skills load it as context.
 
 ---
 
 ## 9. Skills
 
-Skills are markdown files in `skills/` that the user invokes from their favorite coding assistant. `whetstone` is the entry skill — the one a new user (or returning user picking the project back up) runs first to orient themselves. Two are mandatory for the loop itself (`analyze-traces`, `fix-failure-mode`); `harden` is an optional end-of-loop skill. Skills do the LLM judgment work and shell out to `whetstone validate` (and other CLI primitives from §6.2) for deterministic checks. The skill format is intentionally portable (plain markdown + filesystem conventions) so it isn't bound to any single coding-assistant vendor.
+Skills are markdown files in `skills/` that the user invokes from their favorite coding assistant. `tracebound` is the entry skill — the one a new user (or returning user picking the project back up) runs first to orient themselves. Two are mandatory for the loop itself (`analyze-traces`, `fix-failure-mode`); `harden` is an optional end-of-loop skill. Skills do the LLM judgment work and shell out to `tracebound validate` (and other CLI primitives from §6.2) for deterministic checks. The skill format is intentionally portable (plain markdown + filesystem conventions) so it isn't bound to any single coding-assistant vendor.
 
-### 9.1 `whetstone` (entry skill)
+### 9.1 `tracebound` (entry skill)
 
-**Trigger:** the user invokes the skill from their favorite coding assistant with no other context — e.g. "run whetstone", "what can I do here?", or as the first command they run after cloning a repo. This is the orientation surface; it answers "where am I, what state is the project in, what should I do next?".
+**Trigger:** the user invokes the skill from their favorite coding assistant with no other context — e.g. "run tracebound", "what can I do here?", or as the first command they run after cloning a repo. This is the orientation surface; it answers "where am I, what state is the project in, what should I do next?".
 
 **Inputs:**
 
-- The current working directory (it is bootstrap-aware — it does not require Whetstone to already be installed).
-- `whetstone.config.md` and `failure_modes.json` if they exist.
+- The current working directory (it is bootstrap-aware — it does not require Tracebound to already be installed).
+- `tracebound.config.md` and `failure_modes.json` if they exist.
 
 **Behaviour:**
 
 1. **Detect project state.** Three branches:
-   - **No `whetstone/` directory.** Explain in one screen what Whetstone is, list what `whetstone init` would create (per §6.2), and ask the user whether to run it. Stop until they confirm. On confirmation, run `whetstone init`, then continue from step 2. On decline, exit cleanly.
-   - **Partially initialized** (`whetstone/` exists but `whetstone.config.md` or `failure_modes.json` is missing). Tell the user the project is partially set up and offer to run `whetstone init` (which is idempotent) to repair it. Do not try to hand-patch missing files.
+   - **No `tracebound/` directory.** Explain in one screen what Tracebound is, list what `tracebound init` would create (per §6.2), and ask the user whether to run it. Stop until they confirm. On confirmation, run `tracebound init`, then continue from step 2. On decline, exit cleanly.
+   - **Partially initialized** (`tracebound/` exists but `tracebound.config.md` or `failure_modes.json` is missing). Tell the user the project is partially set up and offer to run `tracebound init` (which is idempotent) to repair it. Do not try to hand-patch missing files.
    - **Fully initialized.** Continue.
-2. **Health check.** Run `whetstone validate --json` and react:
+2. **Health check.** Run `tracebound validate --json` and react:
    - On pass: continue.
    - On fail: print the structured issues and stop. Do not auto-fix — a broken catalogue is a "fix this before doing anything else" signal, and the analyze/fix skills already self-correct within their own scope. Surface the issues and let the user decide.
 3. **Orientation.** Print, in this order:
    - **Catalogue snapshot.** Counts of failure modes by status, count of pending traces across files under `traces/`, and the most recently modified file under `traces/` (if any).
    - **Workflow map.** A one-paragraph summary of the loop (§5), with the next likely step highlighted given the snapshot (e.g. "you have 3 pending traces in `langfuse-2026-04-26.jsonl` — consider running `analyze-traces`").
-   - **Available skills.** One line each for every skill in `skills/`, including `whetstone` itself. Mark mandatory vs optional.
+   - **Available skills.** One line each for every skill in `skills/`, including `tracebound` itself. Mark mandatory vs optional.
    - **Available CLI commands.** One line each for every command from §6.2, with the flag set most users care about.
    - **Common next actions.** A short "if you want to do X, run Y" table grounded in the current state.
 4. **Stop.** Wait for the user to pick the next step. The skill never proactively invokes `analyze-traces`, `fix-failure-mode`, or any other skill — its job is orientation, not driving.
 
 **Output contract:**
 
-- Read-only after the optional `whetstone init` in step 1. The skill never edits trace files, `failure_modes.json`, code under `agent/`, or `evals/`.
+- Read-only after the optional `tracebound init` in step 1. The skill never edits trace files, `failure_modes.json`, code under `agent/`, or `evals/`.
 - Every invocation finishes with the user oriented: a clear "you are here, the catalogue is in state X, the next likely step is Y."
-- Honors the same hard rules from `whetstone.config.md` as every other skill (e.g. `jq` for any JSON inspection it does at the shell level).
+- Honors the same hard rules from `tracebound.config.md` as every other skill (e.g. `jq` for any JSON inspection it does at the shell level).
 
-**Why a skill and not a CLI command:** the orientation step is mostly *interpretation* of state — picking the next likely action, summarising the catalogue in human terms, explaining the workflow in light of what's actually in this repo. That's LLM-judgment work, exactly the seam from §6 where skills live and the CLI doesn't. The CLI's `whetstone status` (§6.2) gives the same data in JSON for programmatic use; this skill is the human-facing front door that sits on top.
+**Why a skill and not a CLI command:** the orientation step is mostly *interpretation* of state — picking the next likely action, summarising the catalogue in human terms, explaining the workflow in light of what's actually in this repo. That's LLM-judgment work, exactly the seam from §6 where skills live and the CLI doesn't. The CLI's `tracebound status` (§6.2) gives the same data in JSON for programmatic use; this skill is the human-facing front door that sits on top.
 
 ### 9.2 `analyze-traces`
 
@@ -458,7 +458,7 @@ Skills are markdown files in `skills/` that the user invokes from their favorite
 
 **Inputs:**
 
-- `whetstone.config.md`
+- `tracebound.config.md`
 - Current `failure_modes.json`
 - The traces file under `traces/` that the user named (one file per invocation)
 
@@ -469,7 +469,7 @@ Skills are markdown files in `skills/` that the user invokes from their favorite
 3. For each trace: reads transcript + tool calls + feedback, classifies into existing FM(s) or proposes a new one.
 4. Bias toward reusing existing failure modes; merging similar ones; *only* split when the fix path would clearly differ.
 5. Updates the input file (rewriting affected lines in place to set `analysis.status` and `failure_mode_ids[]`) and `failure_modes.json`.
-6. Runs `whetstone validate` after each batch's writes. On failure, reads the structured error report and self-corrects (the validator names the file, line, JSON path, and a hint for each issue), then re-validates. Loops until clean. Recovery from a bad write is the user's working tree under git — Whetstone does not snapshot.
+6. Runs `tracebound validate` after each batch's writes. On failure, reads the structured error report and self-corrects (the validator names the file, line, JSON path, and a hint for each issue), then re-validates. Loops until clean. Recovery from a bad write is the user's working tree under git — Tracebound does not snapshot.
 
 **Output contract:** every trace in the chosen file ends with `analysis.status ∈ { "analyzed", "skipped" }`. No partial states. Other files under `traces/` are untouched.
 
@@ -493,7 +493,7 @@ Each phase is a checkpoint — the user can stop, inspect, and resume.
 
 **Trigger:** the user invokes the skill from their favorite coding assistant with a failure-mode id. Refuses to run unless the failure mode is in `verified` state (you cannot harden a fix that hasn't been shown to work).
 
-**Inputs:** the failure mode + all linked traces + the agent's source tree + `whetstone.config.md` (specifically the "Golden datasets & scorers" section).
+**Inputs:** the failure mode + all linked traces + the agent's source tree + `tracebound.config.md` (specifically the "Golden datasets & scorers" section).
 
 **Behaviour:**
 
@@ -520,7 +520,7 @@ Sorts open failure modes by impact (`evidence.trace_count × severity_weight × 
 - `failure_modes.json` — single JSON document. Versioned in git.
 - No `schema_version` field in v1. The schema is small enough that breaking changes can be handled by a one-shot migration when (if) we need one. We'll add a version field the day we actually need to migrate.
 - All artifacts are intended to live in **the agent's own repo** (or a sister repo) so failure modes show up in PRs and code review.
-- **Use `jq` for all JSON manipulation.** Skills, adapter scripts, and any shell-level tool inside Whetstone must read, filter, slice, and transform files under `traces/` and `failure_modes.json` via `jq` (and `jq -c` for JSONL streams). No `grep`/`sed`/`awk` against JSON, no hand-rolled parsers in shell. Reasons: (a) `jq` understands JSON structure, so filters can't be silently broken by reformatting or new fields, (b) JSONL streams are first-class (`jq -c`), (c) failures surface as parse errors instead of garbage output. In-process code (TypeScript skills, adapters) uses native `JSON.parse`/`stringify`; the `jq` rule covers the boundary between shell and JSON.
+- **Use `jq` for all JSON manipulation.** Skills, adapter scripts, and any shell-level tool inside Tracebound must read, filter, slice, and transform files under `traces/` and `failure_modes.json` via `jq` (and `jq -c` for JSONL streams). No `grep`/`sed`/`awk` against JSON, no hand-rolled parsers in shell. Reasons: (a) `jq` understands JSON structure, so filters can't be silently broken by reformatting or new fields, (b) JSONL streams are first-class (`jq -c`), (c) failures surface as parse errors instead of garbage output. In-process code (TypeScript skills, adapters) uses native `JSON.parse`/`stringify`; the `jq` rule covers the boundary between shell and JSON.
 
 ---
 
@@ -531,7 +531,7 @@ Sorts open failure modes by impact (`evidence.trace_count × severity_weight × 
 - **Cohort** — the set of traces linked to a given failure mode.
 - **Failure mode** — a recurring, named class of agent failure with shared cause and shared fix path.
 - **Adapter** — a thin module that pulls traces from a provider into the canonical `Trace` shape.
-- **Skill** — a markdown file the user invokes from their favorite coding assistant for a specific stage of the loop. Whetstone's runtime in v1; portable across coding assistants.
+- **Skill** — a markdown file the user invokes from their favorite coding assistant for a specific stage of the loop. Tracebound's runtime in v1; portable across coding assistants.
 - **Replay** — re-running a stored trace's input against the current agent build to check pass/fail.
 - **Golden dataset** — a JSONL file of canonical input/expected-output pairs the agent must satisfy. Lives under `evals/golden/`. Grown by the `harden` skill, one curated example per failure mode (or per sub-pattern).
 - **Scorer** — a function or LLM-as-judge prompt that returns pass/fail for a single trace against an expected behaviour. Lives under `evals/scorers/`. Two flavours: **deterministic** (TypeScript) for structural checks, **LLM-as-judge** (markdown rubric) for semantic checks.
@@ -541,12 +541,12 @@ Sorts open failure modes by impact (`evidence.trace_count × severity_weight × 
 
 ## 12. Name & metaphor
 
-**Whetstone** is the fine-grained stone used to sharpen a blade — you draw the edge across the stone at a careful angle and it grinds away tiny amounts of metal until the edge is keen again. The verb *to whet* means "to sharpen" (same root as *whet your appetite*).
+**Tracebound** is the fine-grained stone used to sharpen a blade — you draw the edge across the stone at a careful angle and it grinds away tiny amounts of metal until the edge is keen again. The verb *to whet* means "to sharpen" (same root as *whet your appetite*).
 
 The metaphor maps directly onto the system:
 
 - **The agent is the blade.** It's already functional and shipped — it doesn't need to be replaced, just maintained.
 - **Production traces are the friction.** They reveal where the edge is rolled, chipped, or dulled — not in theory, but against real material the blade was meant to cut.
-- **Whetstone is the stone.** It removes a tiny amount of material, in exactly the right places, repeatedly, over the lifetime of the blade. One pass doesn't transform the edge; the discipline of returning to the stone does.
+- **Tracebound is the stone.** It removes a tiny amount of material, in exactly the right places, repeatedly, over the lifetime of the blade. One pass doesn't transform the edge; the discipline of returning to the stone does.
 
-It's deliberately a *maintenance* metaphor, not a creation one. Whetstone never forges an agent from scratch and never claims to. It assumes there is something already useful in production, that the world is wearing it down, and that the right response is regular, careful, evidence-based sharpening — guided by the marks the world has already left on the blade.
+It's deliberately a *maintenance* metaphor, not a creation one. Tracebound never forges an agent from scratch and never claims to. It assumes there is something already useful in production, that the world is wearing it down, and that the right response is regular, careful, evidence-based sharpening — guided by the marks the world has already left on the blade.

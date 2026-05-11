@@ -13,7 +13,7 @@ import {
 } from "../commands/validate.ts";
 
 async function makeTmp(): Promise<string> {
-  return await mkdtemp(join(tmpdir(), "whetstone-validate-"));
+  return await mkdtemp(join(tmpdir(), "tracebound-validate-"));
 }
 
 const AGENT = "test-agent";
@@ -71,7 +71,7 @@ function findCodes(issues: ValidationIssue[], code: string): ValidationIssue[] {
 }
 
 function agentRoot(cwd: string): string {
-  return join(cwd, "whetstone", AGENT);
+  return join(cwd, "tracebound", AGENT);
 }
 
 test("clean tree from runInit passes validation", async (t) => {
@@ -114,14 +114,14 @@ test("missing required file reports WHET_STRUCT_MISSING per file", async (t) => 
   t.after(() => rm(cwd, { recursive: true, force: true }));
 
   await runInit({ cwd, agent: AGENT });
-  await rm(join(agentRoot(cwd), "whetstone.config.md"));
+  await rm(join(agentRoot(cwd), "tracebound.config.md"));
 
   const report = await runValidate({ cwd, agent: AGENT });
   const missing = findCodes(report.issues, "WHET_STRUCT_MISSING");
 
   assert.equal(report.ok, false);
   assert.equal(missing.length, 1);
-  assert.equal(missing[0]!.file, "whetstone.config.md");
+  assert.equal(missing[0]!.file, "tracebound.config.md");
 });
 
 test("missing subdir reports WHET_STRUCT_MISSING", async (t) => {
@@ -501,7 +501,7 @@ test("two agents validated independently — issues in one don't surface in the 
 
   // Corrupt only beta's failure_modes.json.
   await writeFile(
-    join(cwd, "whetstone", "beta", "failure_modes.json"),
+    join(cwd, "tracebound", "beta", "failure_modes.json"),
     "{ broken json",
     "utf8",
   );

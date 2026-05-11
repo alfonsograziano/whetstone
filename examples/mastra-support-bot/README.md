@@ -1,14 +1,14 @@
 # mastra-support-bot
 
 End-to-end example: a Mastra agent that misbehaves on purpose, plus the
-Whetstone wiring that pulls its annotated traces back into the catalogue.
+Tracebound wiring that pulls its annotated traces back into the catalogue.
 
 The agent is a customer-support bot with a single `lookup_order` tool and
 instructions tuned to confidently confirm refunds and cancellations even
 when no side-effecting tool exists. This reliably reproduces the
 "hallucinated side-effect" failure mode (assistant claims to have called
 `issue_refund` / `cancel_subscription` but the transcript has no such
-tool call), which is what we want a sample of in the Whetstone trace
+tool call), which is what we want a sample of in the Tracebound trace
 store.
 
 ## Prerequisites
@@ -24,14 +24,14 @@ cp .env.example .env       # then edit .env to add OPENAI_API_KEY
 npm install
 ```
 
-The repo already contains an initialised whetstone tree under
-[whetstone/](whetstone/) (created by `whetstone init`):
+The repo already contains an initialised tracebound tree under
+[tracebound/](tracebound/) (created by `tracebound init`):
 
 ```
-whetstone/
-├── whetstone.config.md
+tracebound/
+├── tracebound.config.md
 ├── failure_modes.json
-├── adapters/mastra.ts        # Mastra → Whetstone trace adapter
+├── adapters/mastra.ts        # Mastra → Tracebound trace adapter
 ├── traces/                   # output JSONL lands here
 └── failure_modes/
 ```
@@ -118,14 +118,14 @@ Required: `--trace-id`, `--value`, `--comment`. Useful flags: `--type`
 `--user-id`. Repeat for as many traces as you want to seed; mix
 sentiments and sources to exercise the adapter's mapping.
 
-### 4. Pull the annotated traces into Whetstone
+### 4. Pull the annotated traces into Tracebound
 
-[whetstone/adapters/mastra.ts](whetstone/adapters/mastra.ts) lists
+[tracebound/adapters/mastra.ts](tracebound/adapters/mastra.ts) lists
 feedback in a date window, groups by `traceId`, fetches each trace, and
-writes Whetstone-shape JSONL to `whetstone/traces/`.
+writes Tracebound-shape JSONL to `tracebound/traces/`.
 
 ```bash
-node whetstone/adapters/mastra.ts --max-traces 50 \
+node tracebound/adapters/mastra.ts --max-traces 50 \
   --from 2026-04-26T00:00:00Z \
   --to   2026-04-27T00:00:00Z
 ```
@@ -135,15 +135,15 @@ Output:
 ```
 Pulling feedback from http://localhost:4111 between … (max 50 traces)…
 Fetching 2 annotated trace(s)…
-Wrote 2 trace(s) to whetstone/traces/mastra-2026-04-26.jsonl
+Wrote 2 trace(s) to tracebound/traces/mastra-2026-04-26.jsonl
 ```
 
 Defaults (when flags are omitted): last 24 h, max 100 traces, output
-`whetstone/traces/mastra-<YYYY-MM-DD>.jsonl`. Only traces with at least
+`tracebound/traces/mastra-<YYYY-MM-DD>.jsonl`. Only traces with at least
 one feedback record are emitted — that's the "filter to annotated /
 commented traces" requirement.
 
-Each line of the JSONL is a Whetstone `Trace`:
+Each line of the JSONL is a Tracebound `Trace`:
 
 ```json
 {
@@ -160,7 +160,7 @@ Each line of the JSONL is a Whetstone `Trace`:
 }
 ```
 
-Validate it with the Whetstone CLI from anywhere inside this directory:
+Validate it with the Tracebound CLI from anywhere inside this directory:
 
 ```bash
 node ../../dist/cli.js validate
@@ -177,11 +177,11 @@ To start over with a clean trace + feedback store:
 ```bash
 # stop `npm run dev` first
 rm -f mastra.db mastra.db-* mastra-observability.duckdb
-rm -f whetstone/traces/*.jsonl
+rm -f tracebound/traces/*.jsonl
 ```
 
-The Whetstone failure-mode catalogue lives in
-[whetstone/failure_modes.json](whetstone/failure_modes.json) — leave it
+The Tracebound failure-mode catalogue lives in
+[tracebound/failure_modes.json](tracebound/failure_modes.json) — leave it
 alone unless you want to reset that too.
 
 ## What's where
@@ -193,5 +193,5 @@ alone unless you want to reset that too.
 | [src/mastra/tools/lookup-order.ts](src/mastra/tools/lookup-order.ts) | The one tool the agent has (no `issue_refund`) |
 | [scripts/chat.ts](scripts/chat.ts) | CLI: send a message, print the traceId |
 | [scripts/add-feedback.ts](scripts/add-feedback.ts) | CLI: attach feedback to a trace |
-| [whetstone/adapters/mastra.ts](whetstone/adapters/mastra.ts) | Adapter: pull annotated traces into Whetstone JSONL |
-| [whetstone/whetstone.config.md](whetstone/whetstone.config.md) | Whetstone project config (template) |
+| [tracebound/adapters/mastra.ts](tracebound/adapters/mastra.ts) | Adapter: pull annotated traces into Tracebound JSONL |
+| [tracebound/tracebound.config.md](tracebound/tracebound.config.md) | Tracebound project config (template) |

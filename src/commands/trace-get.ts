@@ -14,7 +14,7 @@ export interface TraceGetOptions {
 export interface TraceGetResult {
   /** The matched trace, or null if not found. */
   trace: Trace | null;
-  /** Path of the JSONL file that contained the trace, relative to `whetstone/<agent>/`. */
+  /** Path of the JSONL file that contained the trace, relative to `tracebound/<agent>/`. */
   file: string | null;
   /** 1-based line number within that file. */
   line: number | null;
@@ -31,7 +31,7 @@ async function pathExists(p: string): Promise<boolean> {
 }
 
 /**
- * Search all traces/*.jsonl files under `whetstone/<agent>/` for a trace matching `id`.
+ * Search all traces/*.jsonl files under `tracebound/<agent>/` for a trace matching `id`.
  * Files are scanned in sorted order; scanning stops at first match.
  */
 export async function runTraceGet(

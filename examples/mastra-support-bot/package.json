@@ -2,7 +2,7 @@
   "name": "mastra-support-bot",
   "version": "0.1.0",
   "private": true,
-  "description": "Example Mastra agent that misbehaves on purpose. Used to generate annotated traces for the Whetstone adapter demo.",
+  "description": "Example Mastra agent that misbehaves on purpose. Used to generate annotated traces for the Tracebound adapter demo.",
   "type": "module",
   "scripts": {
     "dev": "mastra dev",

@@ -1,10 +1,10 @@
 {
-  "name": "@whetstone/cli",
+  "name": "@tracebound/cli",
   "version": "0.1.0",
-  "description": "Whetstone CLI: deterministic primitives for the Whetstone agent-improvement loop.",
+  "description": "Tracebound CLI: deterministic primitives for the Tracebound agent-improvement loop.",
   "type": "module",
   "bin": {
-    "whetstone": "./dist/cli.js"
+    "tracebound": "./dist/cli.js"
   },
   "files": [
     "dist",

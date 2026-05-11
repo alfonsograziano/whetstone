@@ -17,13 +17,13 @@ import {
 } from "../commands/fm-get.ts";
 
 async function makeTmp(): Promise<string> {
-  return await mkdtemp(join(tmpdir(), "whetstone-get-"));
+  return await mkdtemp(join(tmpdir(), "tracebound-get-"));
 }
 
 const AGENT = "test-agent";
 
 function agentRoot(cwd: string, agent: string = AGENT): string {
-  return join(cwd, "whetstone", agent);
+  return join(cwd, "tracebound", agent);
 }
 
 function traceJsonl(id: string, fmIds: string[] = []): string {

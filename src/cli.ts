@@ -29,15 +29,15 @@ import {
   runValidate,
 } from "./commands/validate.ts";
 
-const USAGE = `whetstone — deterministic primitives for the Whetstone agent-improvement loop.
+const USAGE = `tracebound — deterministic primitives for the Tracebound agent-improvement loop.
 
 Usage:
-  whetstone <command> [options]
+  tracebound <command> [options]
 
 Commands:
-  init <agent-name>    Scaffold the whetstone/<agent-name>/ folder in the current repo.
-  agents               List the agents configured under whetstone/.
-  validate             Validate one agent's whetstone/<agent>/ tree against schemas + invariants.
+  init <agent-name>    Scaffold the tracebound/<agent-name>/ folder in the current repo.
+  agents               List the agents configured under tracebound/.
+  validate             Validate one agent's tracebound/<agent>/ tree against schemas + invariants.
   status               Print catalogue health + pending-trace counts for one agent.
   trace get <id>       Find a trace by id across one agent's traces/*.jsonl files.
   fm get <id>          Print a failure mode by id from one agent's failure_modes.json.
@@ -46,13 +46,13 @@ Global options:
   -h, --help           Show this help.
   -v, --version        Print the CLI version.
 
-Run 'whetstone <command> --help' for command-specific options.
+Run 'tracebound <command> --help' for command-specific options.
 `;
 
-const INIT_USAGE = `whetstone init <agent-name> — scaffold whetstone/<agent-name>/.
+const INIT_USAGE = `tracebound init <agent-name> — scaffold tracebound/<agent-name>/.
 
 Usage:
-  whetstone init <agent-name> [options]
+  tracebound init <agent-name> [options]
 
 Positionals:
   <agent-name>         Required. Lowercase letters, digits, underscores, hyphens.
@@ -63,17 +63,17 @@ Options:
                        Must exist and be a directory.
   -h, --help           Show this help.
 
-Multiple agents can coexist as siblings under whetstone/. Pre-existing files
+Multiple agents can coexist as siblings under tracebound/. Pre-existing files
 are left untouched and reported as skipped. To refresh a file, delete it first
 and re-run init.
 `;
 
-const AGENTS_USAGE = `whetstone agents — list the agents configured under whetstone/.
+const AGENTS_USAGE = `tracebound agents — list the agents configured under tracebound/.
 
 Usage:
-  whetstone agents [options]
+  tracebound agents [options]
 
-Lists every subdirectory of whetstone/ that contains a whetstone.config.md file,
+Lists every subdirectory of tracebound/ that contains a tracebound.config.md file,
 sorted alphabetically. Subdirectories without that file are skipped silently
 (partial inits or unrelated folders). Exits 0 even when no agents are configured.
 
@@ -87,22 +87,22 @@ Exit codes:
   2  could not run (missing/invalid --cwd)
 `;
 
-const VALIDATE_USAGE = `whetstone validate — validate one agent's whetstone/<agent>/ tree.
+const VALIDATE_USAGE = `tracebound validate — validate one agent's tracebound/<agent>/ tree.
 
 Usage:
-  whetstone validate --agent <name> [options]
+  tracebound validate --agent <name> [options]
 
 Checks:
-  - Structure: whetstone.config.md, failure_modes.json, traces/, failure_modes/, adapters/.
+  - Structure: tracebound.config.md, failure_modes.json, traces/, failure_modes/, adapters/.
   - Schemas:   failure_modes.json (FailureModesFile) and every traces/*.jsonl line (Trace).
   - Invariants: unique failure-mode ids, affected-trace files & ids exist, bidirectional
                 links between failure modes and traces, no duplicate (filename, traceId)
                 entries, no dangling failureModeIds[] references on traces.
 
 Options:
-  -a, --agent <name>   Required. Agent to validate (under whetstone/<name>/).
+  -a, --agent <name>   Required. Agent to validate (under tracebound/<name>/).
   -C, --cwd <path>     Directory to validate inside (default: process.cwd()).
-                       Must contain a whetstone/ folder.
+                       Must contain a tracebound/ folder.
   --json               Emit a structured JSON report instead of human text.
   -h, --help           Show this help.
 
@@ -112,16 +112,16 @@ Exit codes:
   2  could not run (missing/invalid --cwd, missing or unknown --agent, IO error)
 `;
 
-const TRACE_GET_USAGE = `whetstone trace get <id> — find a trace by id within one agent.
+const TRACE_GET_USAGE = `tracebound trace get <id> — find a trace by id within one agent.
 
 Usage:
-  whetstone trace get <id> --agent <name> [options]
+  tracebound trace get <id> --agent <name> [options]
 
-Searches all traces/*.jsonl files under whetstone/<agent>/ (sorted alphabetically)
+Searches all traces/*.jsonl files under tracebound/<agent>/ (sorted alphabetically)
 and prints the first trace whose "id" field matches. Scanning stops at first match.
 
 Options:
-  -a, --agent <name>   Required. Agent to search (under whetstone/<name>/).
+  -a, --agent <name>   Required. Agent to search (under tracebound/<name>/).
   -C, --cwd <path>     Directory to inspect (default: process.cwd()).
   --json               Emit a structured JSON object instead of pretty-printed trace.
   -h, --help           Show this help.
@@ -132,16 +132,16 @@ Exit codes:
   2  could not run (missing/invalid --cwd, missing or unknown --agent, IO error)
 `;
 
-const FM_GET_USAGE = `whetstone fm get <id> — print a failure mode by id within one agent.
+const FM_GET_USAGE = `tracebound fm get <id> — print a failure mode by id within one agent.
 
 Usage:
-  whetstone fm get <id> --agent <name> [options]
+  tracebound fm get <id> --agent <name> [options]
 
 Looks up the failure mode whose "id" field matches in
-whetstone/<agent>/failure_modes.json and prints it.
+tracebound/<agent>/failure_modes.json and prints it.
 
 Options:
-  -a, --agent <name>   Required. Agent to query (under whetstone/<name>/).
+  -a, --agent <name>   Required. Agent to query (under tracebound/<name>/).
   -C, --cwd <path>     Directory to inspect (default: process.cwd()).
   --json               Emit a structured JSON object instead of pretty-printed record.
   -h, --help           Show this help.
@@ -152,10 +152,10 @@ Exit codes:
   2  could not run (missing/invalid --cwd, missing or unknown --agent, IO error)
 `;
 
-const STATUS_USAGE = `whetstone status — print catalogue health for one agent.
+const STATUS_USAGE = `tracebound status — print catalogue health for one agent.
 
 Usage:
-  whetstone status --agent <name> [options]
+  tracebound status --agent <name> [options]
 
 Reports:
   - Failure-mode counts by lifecycle status (discovered, investigating, verified, …).
@@ -164,16 +164,16 @@ Reports:
   - Per-file trace counts under traces/, including pending counts.
 
 Options:
-  -a, --agent <name>   Required. Agent to inspect (under whetstone/<name>/).
+  -a, --agent <name>   Required. Agent to inspect (under tracebound/<name>/).
   -C, --cwd <path>     Directory to inspect (default: process.cwd()).
-                       Must contain a whetstone/ folder.
+                       Must contain a tracebound/ folder.
   --json               Emit a structured JSON report instead of human text.
   -h, --help           Show this help.
 
 Exit codes:
   0  status report printed
   2  could not run (missing/invalid --cwd, missing or unknown --agent, malformed
-     failure_modes.json — run 'whetstone validate --agent <name>' for details)
+     failure_modes.json — run 'tracebound validate --agent <name>' for details)
 `;
 
 async function readVersion(): Promise<string> {
@@ -198,7 +198,7 @@ async function formatAvailableAgents(cwd?: string): Promise<string> {
   try {
     const agents = await listAgents(cwd);
     if (agents.length === 0) {
-      return "(none — run 'whetstone init <name>' to create one)";
+      return "(none — run 'tracebound init <name>' to create one)";
     }
     return agents.map((a) => a.name).join(", ");
   } catch {
@@ -313,7 +313,7 @@ async function runTraceGetCommand(argv: string[]): Promise<void> {
 
   const id = parsed.positionals[0];
   if (!id) {
-    fail("Usage: whetstone trace get <id> --agent <name>", 2);
+    fail("Usage: tracebound trace get <id> --agent <name>", 2);
   }
 
   if (!parsed.values.agent) {
@@ -363,7 +363,7 @@ async function runFmGetCommand(argv: string[]): Promise<void> {
 
   const id = parsed.positionals[0];
   if (!id) {
-    fail("Usage: whetstone fm get <id> --agent <name>", 2);
+    fail("Usage: tracebound fm get <id> --agent <name>", 2);
   }
 
   if (!parsed.values.agent) {
@@ -501,7 +501,7 @@ async function main(): Promise<void> {
         await runTraceGetCommand(traceRest);
         return;
       }
-      fail(`unknown subcommand: trace ${sub ?? ""}\n\nRun 'whetstone trace get <id>' to look up a trace.`);
+      fail(`unknown subcommand: trace ${sub ?? ""}\n\nRun 'tracebound trace get <id>' to look up a trace.`);
       return;
     }
     case "fm": {
@@ -510,7 +510,7 @@ async function main(): Promise<void> {
         await runFmGetCommand(fmRest);
         return;
       }
-      fail(`unknown subcommand: fm ${sub ?? ""}\n\nRun 'whetstone fm get <id>' to look up a failure mode.`);
+      fail(`unknown subcommand: fm ${sub ?? ""}\n\nRun 'tracebound fm get <id>' to look up a failure mode.`);
       return;
     }
     default:

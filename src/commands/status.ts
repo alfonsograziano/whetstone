@@ -43,7 +43,7 @@ export interface StatusTraceFileSummary {
 }
 
 export interface StatusReport {
-  /** Absolute path to the `whetstone/<agent>/` root that was inspected. */
+  /** Absolute path to the `tracebound/<agent>/` root that was inspected. */
   rootPath: string;
   catalogue: {
     totalFailureModes: number;
@@ -158,7 +158,7 @@ export async function runStatus(
   const fmInfo = await inspectPath(fmPath);
   if (!fmInfo.exists || !fmInfo.isFile) {
     throw new Error(
-      `failure_modes.json is missing under ${rootPath}. Run "whetstone init ${agentName}" or "whetstone validate --agent ${agentName}" to recover.`,
+      `failure_modes.json is missing under ${rootPath}. Run "tracebound init ${agentName}" or "tracebound validate --agent ${agentName}" to recover.`,
     );
   }
 
@@ -168,13 +168,13 @@ export async function runStatus(
     parsed = JSON.parse(raw);
   } catch (err) {
     throw new Error(
-      `failure_modes.json is not valid JSON (${(err as Error).message}). Run "whetstone validate --agent ${agentName}" for details.`,
+      `failure_modes.json is not valid JSON (${(err as Error).message}). Run "tracebound validate --agent ${agentName}" for details.`,
     );
   }
   const result = FailureModesFileSchema.safeParse(parsed);
   if (!result.success) {
     throw new Error(
-      `failure_modes.json does not match the FailureModesFile schema. Run "whetstone validate --agent ${agentName}" for the structured report.`,
+      `failure_modes.json does not match the FailureModesFile schema. Run "tracebound validate --agent ${agentName}" for the structured report.`,
     );
   }
 

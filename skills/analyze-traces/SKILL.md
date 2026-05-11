@@ -1,29 +1,29 @@
 ---
 name: analyze-traces
-description: Use this skill whenever the user asks to analyze, classify, cluster, or harvest failure modes from a Whetstone trace file (JSONL under `whetstone/<agent>/traces/`). Trigger on phrases like "run analyze-traces", "process this langfuse dump", "cluster the failures in traces/foo.jsonl", "update failure_modes.json from these traces", or any request to batch-process production agent traces into a failure-mode catalogue. The skill takes ONE agent and ONE trace file per invocation, filters traces with negative feedback signals, classifies each into existing or newly-created failure modes (biased toward reuse), and writes back enriched traces + an updated `failure_modes.json` — running `whetstone validate --agent <agent>` after every batch and self-correcting until it passes.
+description: Use this skill whenever the user asks to analyze, classify, cluster, or harvest failure modes from a Tracebound trace file (JSONL under `tracebound/<agent>/traces/`). Trigger on phrases like "run analyze-traces", "process this langfuse dump", "cluster the failures in traces/foo.jsonl", "update failure_modes.json from these traces", or any request to batch-process production agent traces into a failure-mode catalogue. The skill takes ONE agent and ONE trace file per invocation, filters traces with negative feedback signals, classifies each into existing or newly-created failure modes (biased toward reuse), and writes back enriched traces + an updated `failure_modes.json` — running `tracebound validate --agent <agent>` after every batch and self-correcting until it passes.
 ---
 
 # analyze-traces
 
-Whetstone's trace-clustering pass. Operates on a single agent at a time. Takes one JSONL file under `whetstone/<agent_name>/traces/`, processes its pending negatively-signalled traces in batches, and either matches each one to an existing failure mode, refines an existing failure mode's scope, or creates a new failure mode. Writes back transactionally to the trace file (in place) and `whetstone/<agent_name>/failure_modes.json`; runs `whetstone validate --agent <agent_name>` after every batch; on validation failure, reads the structured error report and self-corrects.
+Tracebound's trace-clustering pass. Operates on a single agent at a time. Takes one JSONL file under `tracebound/<agent_name>/traces/`, processes its pending negatively-signalled traces in batches, and either matches each one to an existing failure mode, refines an existing failure mode's scope, or creates a new failure mode. Writes back transactionally to the trace file (in place) and `tracebound/<agent_name>/failure_modes.json`; runs `tracebound validate --agent <agent_name>` after every batch; on validation failure, reads the structured error report and self-corrects.
 
 This skill is a closed-loop workflow over the user's working tree. It does not commit, push, or open PRs — it leaves the tree ready and stops. The user reviews the diff and decides what to ship. Recovery from a bad write is the user's working tree under git; the skill does not snapshot.
 
 ## Inputs
 
-- **agent_name (required)** — the agent whose traces to analyze. If the user did not specify one, run `npx whetstone agents` and ask which agent to operate on. Stop until the user confirms. Print "Operating on agent: `<agent_name>`" before doing any other work.
-- **trace_file (optional)** — path under `whetstone/<agent_name>/traces/`, e.g. `whetstone/support-bot/traces/langfuse-2026-04-26.jsonl`. If the user doesn't name a file, list the contents of `whetstone/<agent_name>/traces/` sorted by mtime descending, **propose the most recently modified file** ("Analyze `whetstone/<agent_name>/traces/langfuse-2026-04-27.jsonl` — the most recent? Or pick another."), and wait for confirmation. If the directory is empty, stop and tell the user.
-- **batch_size (optional)** — default from `whetstone/<agent_name>/whetstone.config.md` ("Batch sizing" section); fallback `20`.
+- **agent_name (required)** — the agent whose traces to analyze. If the user did not specify one, run `npx tracebound agents` and ask which agent to operate on. Stop until the user confirms. Print "Operating on agent: `<agent_name>`" before doing any other work.
+- **trace_file (optional)** — path under `tracebound/<agent_name>/traces/`, e.g. `tracebound/support-bot/traces/langfuse-2026-04-26.jsonl`. If the user doesn't name a file, list the contents of `tracebound/<agent_name>/traces/` sorted by mtime descending, **propose the most recently modified file** ("Analyze `tracebound/<agent_name>/traces/langfuse-2026-04-27.jsonl` — the most recent? Or pick another."), and wait for confirmation. If the directory is empty, stop and tell the user.
+- **batch_size (optional)** — default from `tracebound/<agent_name>/tracebound.config.md` ("Batch sizing" section); fallback `20`.
 - **max_batches (optional)** — default from the same section; fallback `10`. After this, stop and tell the user how many traces remain so they can resume.
 
 ## Preflight (run before touching anything)
 
 If any of these fail, stop and tell the user. Don't try to repair the project from this skill.
 
-1. **Working tree is in a Whetstone project.** `whetstone/<agent_name>/whetstone.config.md`, `whetstone/<agent_name>/failure_modes.json`, and `whetstone/<agent_name>/traces/` all exist.
-2. **The catalogue is already valid.** Run `npx whetstone validate --agent <agent_name>`. If it exits non-zero, stop — the project is in an inconsistent state and analyzing more traces will only compound the problem. Show the validate output and ask the user to fix the issues first.
-3. **The chosen file exists** under `whetstone/<agent_name>/traces/` and parses as JSONL (one JSON object per non-blank line).
-4. **Read the project config** (`whetstone/<agent_name>/whetstone.config.md`). Honor the configured batch size, any project-specific filter rules, and the hard rules. Quote the hard rules back to the user before the first batch so they're visible in the transcript.
+1. **Working tree is in a Tracebound project.** `tracebound/<agent_name>/tracebound.config.md`, `tracebound/<agent_name>/failure_modes.json`, and `tracebound/<agent_name>/traces/` all exist.
+2. **The catalogue is already valid.** Run `npx tracebound validate --agent <agent_name>`. If it exits non-zero, stop — the project is in an inconsistent state and analyzing more traces will only compound the problem. Show the validate output and ask the user to fix the issues first.
+3. **The chosen file exists** under `tracebound/<agent_name>/traces/` and parses as JSONL (one JSON object per non-blank line).
+4. **Read the project config** (`tracebound/<agent_name>/tracebound.config.md`). Honor the configured batch size, any project-specific filter rules, and the hard rules. Quote the hard rules back to the user before the first batch so they're visible in the transcript.
 
 ## Workflow
 
@@ -31,8 +31,8 @@ If any of these fail, stop and tell the user. Don't try to repair the project fr
 
 Read into memory:
 
-- `whetstone/<agent_name>/whetstone.config.md` — for batch sizing, filter rules, and hard rules.
-- `whetstone/<agent_name>/failure_modes.json` — current catalogue. Index by `id`. Note titles, descriptions, and tags so you can reason about matches.
+- `tracebound/<agent_name>/tracebound.config.md` — for batch sizing, filter rules, and hard rules.
+- `tracebound/<agent_name>/failure_modes.json` — current catalogue. Index by `id`. Note titles, descriptions, and tags so you can reason about matches.
 - The chosen trace file, line by line.
 
 > **Do NOT preload `originalTraceFile` content for all traces upfront.** Each trace stores a path pointer (e.g. `"original/trc_abc123.json"`). Read those files on demand — only for the traces in the current batch, and only when classifying. Loading all raw traces at once defeats the purpose of splitting them out and will exhaust the context window on large files.
@@ -49,7 +49,7 @@ Build the eligible set with `jq`, in file order:
 
 ```bash
 jq -c 'select(.analysis.status == "pending" and ((.feedback // []) | any(.sentiment == "negative")))' \
-  whetstone/<agent_name>/traces/<file>.jsonl
+  tracebound/<agent_name>/traces/<file>.jsonl
 ```
 
 A pending trace with **no** negative signal is out of scope for this skill — when the time comes to process the batch, mark its `analysis.status = "skipped"` with a one-line note ("no negative feedback signals"). That satisfies the output contract that every processed trace ends in either `analyzed` or `skipped`.
@@ -75,7 +75,7 @@ For each batch (cap at `max_batches`):
 
 3. **Write to disk.** Rewrite the trace file from memory (JSONL is line-structured; a full rewrite is needed for in-place edits). Pretty-print `failure_modes.json` with 2-space indent and a trailing newline.
 
-4. **Validate, and self-correct on failure.** Run `npx whetstone validate --agent <agent_name> --json` (the JSON output is structured: each issue carries `code`, `file`, `line` (for JSONL), `path` (dotted JSON path), `message`, and `hint`).
+4. **Validate, and self-correct on failure.** Run `npx tracebound validate --agent <agent_name> --json` (the JSON output is structured: each issue carries `code`, `file`, `line` (for JSONL), `path` (dotted JSON path), `message`, and `hint`).
 
     - On pass (exit 0): move to the next batch.
     - On fail (non-zero): read each issue, identify the offending field (the `path` is precise), apply a targeted fix, re-run, and re-validate. Loop. Common fixes by `code`:
@@ -101,9 +101,9 @@ In one sentence, pin down what actually went wrong:
 - What's the underlying cause? Read the raw trace file on demand to inspect tool calls, messages, and metadata:
 
   ```bash
-  cat whetstone/<agent_name>/traces/$(jq -r .originalTraceFile <path/to/trace-line.json>)
+  cat tracebound/<agent_name>/traces/$(jq -r .originalTraceFile <path/to/trace-line.json>)
   # or, working from a batch of extracted lines:
-  cat whetstone/<agent_name>/traces/original/<traceId>.json
+  cat tracebound/<agent_name>/traces/original/<traceId>.json
   ```
 
   Look for: missing tool calls, wrong tool args, hallucinated content, broken JSON, latency spikes, refusals, off-topic responses.
@@ -156,9 +156,9 @@ When you create:
 
 ### 5. Schemas — what the writes must conform to
 
-Mirrors `src/schemas/trace.ts` and `src/schemas/failure-mode.ts`. Validated by `whetstone validate` on every batch.
+Mirrors `src/schemas/trace.ts` and `src/schemas/failure-mode.ts`. Validated by `tracebound validate` on every batch.
 
-#### Trace (one JSON object per non-blank line in `whetstone/<agent_name>/traces/<file>.jsonl`)
+#### Trace (one JSON object per non-blank line in `tracebound/<agent_name>/traces/<file>.jsonl`)
 
 | Field | Type | Notes |
 |---|---|---|
@@ -169,13 +169,13 @@ Mirrors `src/schemas/trace.ts` and `src/schemas/failure-mode.ts`. Validated by `
 | `feedback[].sentiment` | `"positive" \| "negative"` | |
 | `feedback[].source` | `"user" \| "sme" \| "other"` | |
 | `feedback[].comment` | string | |
-| `originalTraceFile` | string | Path relative to `whetstone/<agent_name>/traces/` pointing to the raw provider payload (e.g. `"original/trc_abc123.json"`). Read on demand per-batch entry — do **not** preload all files. Don't modify. |
+| `originalTraceFile` | string | Path relative to `tracebound/<agent_name>/traces/` pointing to the raw provider payload (e.g. `"original/trc_abc123.json"`). Read on demand per-batch entry — do **not** preload all files. Don't modify. |
 | `failureModeIds` | array of string | **You append.** Each entry must reference an existing `id` in `failure_modes.json`. De-duplicate. |
 | `analysis.status` | `"pending" \| "analyzed" \| "skipped" \| "error"` | **You set this.** End state must be `analyzed` or `skipped`. |
 | `analysis.analyzedAt` | string (ISO 8601 UTC) or null | **You set** when status flips to `analyzed`. |
 | `analysis.notes` | string or null | **You set** with a one-line classification rationale (or skip reason). |
 
-#### FailureMode (one entry in `whetstone/<agent_name>/failure_modes.json`'s `failureModes[]` array)
+#### FailureMode (one entry in `tracebound/<agent_name>/failure_modes.json`'s `failureModes[]` array)
 
 | Field | Type | Notes |
 |---|---|---|
@@ -188,28 +188,28 @@ Mirrors `src/schemas/trace.ts` and `src/schemas/failure-mode.ts`. Validated by `
 | `discoveredAt` | ISO 8601 UTC or null | Set on creation. |
 | `lastUpdated` | ISO 8601 UTC or null | **Update** every time you touch the FM. |
 | `affectedTraces` | array | **You append**, then cap at 10. Oldest entries (lowest index) are dropped when the list exceeds 10. This is a sample for human inspection — the authoritative backlink lives on the trace's `failureModeIds[]`. |
-| `affectedTraces[].filename` | string | Basename under `whetstone/<agent_name>/traces/`, not the full path. |
+| `affectedTraces[].filename` | string | Basename under `tracebound/<agent_name>/traces/`, not the full path. |
 | `affectedTraces[].traceId` | string | Must match an existing trace's `id` inside that file. |
 
 `status` enum (only `discovered` is valid for new entries from this skill):
 `discovered | triaged | investigating | spec_drafted | fix_approved | fix_in_progress | verifying | verified | regressed | hardening | hardened | wont_fix | closed | duplicate_of:fm_<id>`
 
-#### Cross-file invariants enforced by `whetstone validate`
+#### Cross-file invariants enforced by `tracebound validate`
 
 - All FM ids unique.
-- Every `affectedTraces[]` entry: file exists under `whetstone/<agent_name>/traces/`, trace with that `id` exists in that file.
+- Every `affectedTraces[]` entry: file exists under `tracebound/<agent_name>/traces/`, trace with that `id` exists in that file.
 - Bidirectional: trace listed under FM ⇒ trace's `failureModeIds[]` includes that FM's id.
 - No duplicate `(filename, traceId)` per FM.
 - No `failureModeIds[]` on a trace that doesn't resolve to an FM.
 
-> Note: the inverse is not an invariant — a trace may have an FM id in `failureModeIds[]` without appearing in that FM's `affectedTraces[]` (because it was evicted by the 10-trace cap). `whetstone validate` does not flag this.
+> Note: the inverse is not an invariant — a trace may have an FM id in `failureModeIds[]` without appearing in that FM's `affectedTraces[]` (because it was evicted by the 10-trace cap). `tracebound validate` does not flag this.
 
 
 ### 6. Wrap up
 
 When you've either exhausted eligible traces or hit `max_batches`:
 
-- Run `npx whetstone validate --agent <agent_name>` one final time as a belt-and-braces check.
+- Run `npx tracebound validate --agent <agent_name>` one final time as a belt-and-braces check.
 - Print a final summary: total traces analyzed / skipped, failure modes created / refined.
 - If pending traces remain (because you hit `max_batches`), tell the user the count and how to resume ("re-invoke with the same file; the next eligible batch starts at trace N").
 - Stop. Do not commit, do not push, do not stage. The user reviews the diff and decides what to ship.
@@ -219,17 +219,17 @@ When you've either exhausted eligible traces or hit `max_batches`:
 After the skill runs to completion:
 
 - Every trace in any processed batch has `analysis.status ∈ {"analyzed", "skipped"}`. No `pending` left in any processed batch.
-- Every `failureModeIds[]` entry on a trace resolves to an entry in `whetstone/<agent_name>/failure_modes.json` (bidirectional invariant).
+- Every `failureModeIds[]` entry on a trace resolves to an entry in `tracebound/<agent_name>/failure_modes.json` (bidirectional invariant).
 - Every `affectedTraces[]` entry on a failure mode points to an extant trace in its named file.
-- Other files under `whetstone/<agent_name>/traces/` are untouched.
-- `npx whetstone validate --agent <agent_name>` passes.
-- No file under `whetstone/<other-agent>/` is read or written.
+- Other files under `tracebound/<agent_name>/traces/` are untouched.
+- `npx tracebound validate --agent <agent_name>` passes.
+- No file under `tracebound/<other-agent>/` is read or written.
 
 ## Hard rules
 
 - **Use `jq` / `jq -c` for shell-level JSON.** Never `grep`/`sed`/`awk` against JSON. JSON's structure isn't line-oriented; line-tools will silently mis-handle valid JSON and surface failures as wrong answers, not as parse errors.
-- **One agent and one file per invocation.** Never read or write under `whetstone/<other-agent>/`. The agent name scopes every read and write this skill performs. If they have multiple files, call the skill once per file (and once per agent).
+- **One agent and one file per invocation.** Never read or write under `tracebound/<other-agent>/`. The agent name scopes every read and write this skill performs. If they have multiple files, call the skill once per file (and once per agent).
 - **Validate after every batch and self-correct.** The catalogue is the source of truth; partial writes corrupt it. Read the structured validate report and fix issues by `path`, then re-validate. Stop and surface to the user only after 5 unsuccessful loops on the same batch.
 - **No commits, no pushes, no PRs.** This skill leaves the working tree dirty and stops. Publishing is the user's call.
-- **Honor the project's hard rules** from `whetstone/<agent_name>/whetstone.config.md`. Quote them in your first response so the user sees them.
+- **Honor the project's hard rules** from `tracebound/<agent_name>/tracebound.config.md`. Quote them in your first response so the user sees them.
 - **Cap `affectedTraces[]` at 10 per failure mode.** After appending, drop oldest entries (lowest index) until ≤ 10 remain. Never remove the corresponding trace's `failureModeIds[]` backlink — the trace keeps its FM reference even when evicted from the sample list.

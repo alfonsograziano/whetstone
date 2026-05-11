@@ -9,9 +9,9 @@ const AGENT_NAME_HINT =
 export interface ResolveAgentRootResult {
   /** Absolute path to the resolved cwd. */
   cwdAbsolute: string;
-  /** Absolute path to `<cwd>/whetstone` — the namespace container. */
+  /** Absolute path to `<cwd>/tracebound` — the namespace container. */
   rootContainer: string;
-  /** Absolute path to `<cwd>/whetstone/<agent>`. */
+  /** Absolute path to `<cwd>/tracebound/<agent>`. */
   rootPath: string;
   /** The validated agent name. */
   agentName: string;
@@ -52,15 +52,15 @@ async function resolveCwd(cwd?: string): Promise<string> {
 }
 
 /**
- * List the agents under `<cwd>/whetstone/`. An agent is a subdirectory that
- * contains a `whetstone.config.md` file. Returns an empty list (not an error)
+ * List the agents under `<cwd>/tracebound/`. An agent is a subdirectory that
+ * contains a `tracebound.config.md` file. Returns an empty list (not an error)
  * when the container is missing or empty. Sorted alphabetically.
  */
 export async function listAgents(
   cwd?: string,
 ): Promise<{ name: string; path: string }[]> {
   const cwdAbsolute = await resolveCwd(cwd);
-  const rootContainer = join(cwdAbsolute, "whetstone");
+  const rootContainer = join(cwdAbsolute, "tracebound");
 
   const containerInfo = await inspectPath(rootContainer);
   if (!containerInfo.exists || !containerInfo.isDir) {
@@ -80,7 +80,7 @@ export async function listAgents(
     const agentPath = join(rootContainer, name);
     const info = await inspectPath(agentPath);
     if (!info.isDir) continue;
-    const configInfo = await inspectPath(join(agentPath, "whetstone.config.md"));
+    const configInfo = await inspectPath(join(agentPath, "tracebound.config.md"));
     if (!configInfo.exists || !configInfo.isFile) continue;
     agents.push({ name, path: agentPath });
   }
@@ -89,7 +89,7 @@ export async function listAgents(
 
 function formatAvailable(agents: { name: string }[]): string {
   if (agents.length === 0) {
-    return "(none — run 'whetstone init <name>' to create one)";
+    return "(none — run 'tracebound init <name>' to create one)";
   }
   return agents.map((a) => a.name).join(", ");
 }
@@ -111,7 +111,7 @@ export async function resolveAgentRootForInit(options: {
   }
 
   const cwdAbsolute = await resolveCwd(options.cwd);
-  const rootContainer = join(cwdAbsolute, "whetstone");
+  const rootContainer = join(cwdAbsolute, "tracebound");
   const rootPath = join(rootContainer, agent);
 
   return { cwdAbsolute, rootContainer, rootPath, agentName: agent };
@@ -119,7 +119,7 @@ export async function resolveAgentRootForInit(options: {
 
 /**
  * Resolve the agent root for read commands. Requires that
- * `<cwd>/whetstone/<agent>/` already exists; if not, throws an error that
+ * `<cwd>/tracebound/<agent>/` already exists; if not, throws an error that
  * includes the list of agents that do exist.
  */
 export async function resolveAgentRootForRead(options: {
@@ -135,7 +135,7 @@ export async function resolveAgentRootForRead(options: {
   }
 
   const cwdAbsolute = await resolveCwd(options.cwd);
-  const rootContainer = join(cwdAbsolute, "whetstone");
+  const rootContainer = join(cwdAbsolute, "tracebound");
   const rootPath = join(rootContainer, agent);
 
   const info = await inspectPath(rootPath);

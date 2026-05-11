@@ -9,7 +9,7 @@ const TEMPLATE_PATH = join(
   "..",
   "..",
   "templates",
-  "whetstone.config.md",
+  "tracebound.config.md",
 );
 
 const FAILURE_MODES_SEED = `${JSON.stringify(
@@ -26,7 +26,7 @@ export interface InitOptions {
 }
 
 export interface InitResult {
-  /** Absolute path to the created `whetstone/<agent>/` directory. */
+  /** Absolute path to the created `tracebound/<agent>/` directory. */
   rootPath: string;
   created: string[];
   skipped: string[];
@@ -76,7 +76,7 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
   const templateContents = await readFile(TEMPLATE_PATH, "utf8");
 
   await writeIfMissing(
-    join(rootPath, "whetstone.config.md"),
+    join(rootPath, "tracebound.config.md"),
     templateContents,
     result,
   );
@@ -88,7 +88,7 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
   );
 
   process.stdout.write(
-    `${styleText("green", `✓ Whetstone initialised at ${rootPath}`)}\n`,
+    `${styleText("green", `✓ Tracebound initialised at ${rootPath}`)}\n`,
   );
 
   return result;
