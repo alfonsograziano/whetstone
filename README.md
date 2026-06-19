@@ -33,13 +33,13 @@ Everything lives as diffable files in your repo under a `tracebound/` folder. No
 ## Installation
 
 ```bash
-npm install -g @tracebound/cli
+npm install -g @nearform/tracebound
 ```
 
 Or use without installing:
 
 ```bash
-npx @tracebound/cli <command>
+npx @nearform/tracebound <command>
 ```
 
 ---

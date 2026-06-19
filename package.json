@@ -1,5 +1,5 @@
 {
-  "name": "@tracebound/cli",
+  "name": "@nearform/tracebound",
   "version": "0.1.0",
   "description": "Tracebound CLI: deterministic primitives for the Tracebound agent-improvement loop.",
   "type": "module",
@@ -23,7 +23,7 @@
     "failure-modes"
   ],
   "bin": {
-    "tracebound": "./dist/cli.js"
+    "tracebound": "dist/cli.js"
   },
   "files": [
     "dist",
