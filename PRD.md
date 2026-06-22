@@ -225,7 +225,7 @@ Each pipeline stage that requires reading transcripts, classifying, drafting, or
 
 ### 6.2 CLI (deterministic primitives)
 
-The CLI is a small Node/TypeScript binary distributed as an npm package (`npm i -D @tracebound/cli` → `npx tracebound …`). Its scope is **deterministic, scriptable operations** — anything that doesn't need an LLM in the loop. It is **mostly invoked by skills**, occasionally by the user directly. Schema validation uses `zod`.
+The CLI is a small Node/TypeScript binary distributed as an npm package (`npm i -D @nearform/tracebound` → `npx tracebound …`). Its scope is **deterministic, scriptable operations** — anything that doesn't need an LLM in the loop. It is **mostly invoked by skills**, occasionally by the user directly. Schema validation uses `zod`.
 
 | Command | Purpose |
 |---|---|
