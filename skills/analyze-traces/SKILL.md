@@ -9,6 +9,8 @@ Tracebound's trace-clustering pass. Operates on a single agent at a time. Takes 
 
 This skill is a closed-loop workflow over the user's working tree. It does not commit, push, or open PRs — it leaves the tree ready and stops. The user reviews the diff and decides what to ship. Recovery from a bad write is the user's working tree under git; the skill does not snapshot.
 
+> **⚠️ Feedback comments are NOT ground truth.** A trace's user/SME `feedback[].comment` is a *signal*, primarily written for the human reviewer — it flags that something felt wrong, and often guesses at why. Read it and factor it in, but never treat it as the authoritative diagnosis. The commenter may be mistaken, vague, or describe a symptom rather than the cause. Always confirm the actual root cause yourself by reading the raw trace on demand — inspect the **tool calls and tool responses**, the messages, and the metadata (see §4 Step 1) — before you classify. When the comment and the trace evidence disagree, the trace evidence wins. Do the deep analysis; do not shortcut to the comment's conclusion.
+
 ## Inputs
 
 - **agent_name (required)** — the agent whose traces to analyze. If the user did not specify one, run `npx tracebound agents` and ask which agent to operate on. Stop until the user confirms. Print "Operating on agent: `<agent_name>`" before doing any other work.
