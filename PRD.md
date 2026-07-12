@@ -383,6 +383,11 @@ Suggested sections (note the unified verification block):
 - Langfuse: env LANGFUSE_HOST, LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY
 - Pull window: last 24h, page size 100
 
+## Sanity checks (run before any code change is committed)
+- `npm run typecheck`
+- `npm run lint`
+- `npm test -- --run`
+
 ## Verify the fix
 ### Targeted trace replay
 Command: `npm run agent:replay -- --failure-mode fm_2026_04_hallucinated_action`
@@ -392,14 +397,15 @@ Command: `npm run agent:replay -- --failure-mode fm_2026_04_hallucinated_action`
 
 ### Eval suites
 - `npm run agent:eval -- --scenario <name>` — runs a named scenario from `evals/scenarios/*.yaml`
-- `npm run prompt:diff` — prints diff between deployed prompt and working tree
+- `npm run prompt:diff` — prints diff between deployed prompt and working tree. Describe how to interpret the output for this failure mode.
 
-### Sanity checks
+### Sanity checks (fallback)
 - `npm run typecheck`
 - `npm run lint`
 - `npm test -- --run`
+Call out explicitly when no targeted replay or eval suite exists so `implement-failure-mode` can warn and confirm before relying on these alone.
 
-## Harden the fix (optional)
+## Optional hardening (golden datasets & scorers)
 - Golden dataset path: `evals/golden/`. New entries land as JSONL files named after the failure mode.
 - Deterministic scorer path: `evals/scorers/*.ts`. Each scorer exports a `(trace) => { pass: boolean, reason?: string }` function.
 - LLM-as-judge scorer path: `evals/scorers/*.judge.md`. Each judge is a markdown prompt + rubric; the runner injects the trace.
@@ -499,7 +505,7 @@ Each phase is a checkpoint — the user can stop, inspect, and resume.
 
 **Trigger:** the user invokes the skill from their favorite coding assistant with a failure-mode id. Refuses to run unless the failure mode is in `verified` state (you cannot harden a fix that hasn't been shown to work).
 
-**Inputs:** the failure mode + all linked traces + the agent's source tree + `tracebound.config.md` (specifically the "Golden datasets & scorers" section).
+**Inputs:** the failure mode + all linked traces + the agent's source tree + `tracebound.config.md` (specifically the "Optional hardening" section).
 
 **Behaviour:**
 

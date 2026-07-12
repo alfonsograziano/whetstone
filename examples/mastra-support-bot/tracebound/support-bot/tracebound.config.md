@@ -25,31 +25,22 @@ Add or remove adapters under `adapters/`. The `ingest-traces` skill calls these.
 ## Verify the fix
 
 <!--
+Document the commands to run after a fix to prove the failure is resolved.
+
 ### Targeted trace replay
-Command: `npm run agent:replay -- --failure-mode <id>`
-
-This command must:
-- Consume the failure-mode cohort `input` values (for example via `--failure-mode <id>` or a JSONL file exported from `failure_modes.json`).
-- Invoke the agent on every captured input and emit a structured pass/fail outcome for each replayed trace.
-- Exit 0 when all traces replay successfully and non-zero when the replay cannot run to completion.
-
-If this subsection is absent or the `Command:` line is missing, `implement-failure-mode` will warn and fall back to the Eval suites or Sanity checks documented below.
+- `npm run agent:replay -- --cohort traces/hallucinated-action.jsonl` — replays the captured failure-mode cohort; each trace `input` should now pass.
 
 ### Eval suites
-- `npm run agent:eval -- --scenario <name>` — runs a named scenario from `evals/scenarios/*.yaml`
-- `npm run prompt:diff` — prints diff between deployed prompt and working tree
+- `npm run agent:eval -- --scenario support-bot` — runs the scenario built for this agent; describe how to read the output and interpret failures.
 
-List every regression suite or scenario runner that should execute after a targeted replay succeeds. Include any flags required to scope the run to this failure mode.
-
-### Sanity checks
+### Sanity checks (fallback)
 - `npm run typecheck`
 - `npm run lint`
 - `npm test -- --run`
-
-Document quick-running commands teams must execute when no higher-fidelity verification mode is available. `implement-failure-mode` will surface a warning if only these checks are present.
+If only these checks are available, call it out so the implementer can warn and confirm before relying on them.
 -->
 
-## Harden the fix (optional)
+## Optional hardening (golden datasets & scorers)
 
 <!--
 - Golden dataset path: `evals/golden/`. New entries land as JSONL files named after the failure mode.

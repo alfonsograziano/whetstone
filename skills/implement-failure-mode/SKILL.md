@@ -24,22 +24,17 @@ If any of these fail, stop and tell the user.
 4. **The spec exists.** `tracebound/<agent_name>/failure_modes/<id>/SPEC.md` must exist and contain all required sections (What's failing, Root cause, Proposed fix, Acceptance criteria, Test plan). If missing, tell the user to run `research-failure-mode` first.
 5. **Status is actionable.** Status must be `fix_approved`, `fix_in_progress`, `verifying`, or `regressed`. If `spec_drafted`, the spec hasn't been approved — ask: "The spec hasn't been marked as approved yet. Did you review and approve it? (y/n)". If yes, set `status = "fix_approved"` and continue. If no, stop and direct the user to `research-failure-mode`. If the status is `verified`, `hardened`, `wont_fix`, `closed`, or `duplicate_of:…`, tell the user and stop.
 6. **Read the project config.** Load `tracebound/<agent_name>/tracebound.config.md`. Quote the **Hard rules** section back to the user before doing any work.
-7. **Check verification commands.** Inspect the `## Verify the fix` section in `tracebound/<agent_name>/tracebound.config.md` and capture:
-   - The `Command:` line under `### Targeted trace replay` (if present). This is the primary verification path and must consume the failure-mode cohort `input` values.
+7. **Enumerate verification modes.** Inspect the `## Verify the fix` section in `tracebound/<agent_name>/tracebound.config.md` and capture:
+   - The `Command:` line (or equivalent instructions) under `### Targeted trace replay`. This is the primary verification path and must consume the failure-mode cohort `input` values.
    - Every command listed under `### Eval suites`.
-   - Every command listed under `### Sanity checks`.
+   - Every command listed under `### Sanity checks (fallback)`.
 
-   If the targeted replay command is missing but one or more eval suites are documented, say:
+   Summarize what you found to the user. If the targeted replay command is missing but one or more eval suites are documented, say you'll rely on those suites instead. If the section is missing entirely or only sanity checks are present, say:
 
-   > I didn't find a targeted trace replay command in `tracebound/<agent_name>/tracebound.config.md`. I'll rely on the eval suites listed under `## Verify the fix`.
-
-   If neither a targeted replay command nor any eval suites are documented (only sanity checks are present), say:
-
-   > I couldn't find a targeted trace replay command or any eval suites in `tracebound/<agent_name>/tracebound.config.md`. Only sanity checks are documented. I can still implement the fix and run those checks, but we won't be able to replay the failure-mode cohort to confirm the issue is resolved.
+   > I don't have any eval suites or targeted trace replay instructions in `## Verify the fix`. I can implement the fix and run the project's sanity checks, but I won't be able to replay the failure mode's `input` or run dedicated evals to confirm the regression is gone.
    >
    > **Do you want to proceed anyway? (y/n)**
-   > If yes, I'll implement the fix and run the sanity checks only — verification will be marked as `incomplete`.
-   > To enable live verification, add a `### Targeted trace replay` subsection with a `Command:` line under `## Verify the fix`, then re-run this skill.
+   > If we proceed, I'll run the sanity checks only and mark verification as incomplete until replay instructions are added.
 
    Wait for the user's answer before proceeding. If "n", stop.
 
@@ -138,23 +133,25 @@ For each trace in the cohort, note the `input` field — this is the user messag
 
 ### Targeted trace replay (preferred)
 
-If the `### Targeted trace replay` subsection exposed a `Command:` line, use it to exercise the entire failure-mode cohort. Follow the contract documented in the config — the command must consume the cohort `input` values (via a failure-mode id flag, a JSONL file, or per-trace `--input` invocations).
+If the config listed any commands under `### Targeted trace replay`, run them now. Follow the contract documented in the config — the command must consume the cohort `input` values (via a failure-mode id flag, a JSONL file, or per-trace `--input` invocations).
 
-1. Prepare whatever artifact the command expects (e.g. a JSONL file of the cohort traces or a list of trace ids).
-2. Run the command over the full cohort. If it requires per-trace invocation, loop over each trace's `input` and run the command once per trace.
-3. Capture the raw output for every trace (stdout, structured reports, exit codes).
-4. Evaluate the output against each acceptance criterion that can be checked from the replay (tool calls, refusals, content, etc.).
-5. Record for every trace: `traceId`, the input used, outputs received, pass/fail per criterion, and failure reasons when applicable.
+- When a command expects a cohort file (flags like `--cohort`, `--trace-ids`, or similar), generate it from the traces you collected above. Use `jq` to emit the format the config describes (trace ids, JSONL, etc.), write it to a temp file, and pass that path to the command.
+- When a command replays a single `input` per invocation (e.g. `npm run agent:invoke -- --input "<message>"`), run it once per trace using the stored `input`. Capture stdout and the exit code.
+- After each replay, check the output against every acceptance criterion from the spec that can be evaluated without a full transcript diff. Record `traceId`, the command run, the output, and pass/fail notes.
 
-If the targeted replay command is absent, explicitly note that live cohort replay could not be executed and proceed to the eval suites or sanity-check fallback below.
+If no targeted replay commands were provided, explicitly note that live cohort replay could not be executed and move on to the eval suites or sanity-check fallback below.
 
 ### Eval suites
 
-Run every command listed under `### Eval suites` once the targeted replay passes. If no targeted replay command exists, these suites become the primary verification signal — document that hand-off. Capture their outputs and map any failures back to acceptance criteria or spec expectations.
+Run every command captured under `### Eval suites`. If a targeted replay ran first, these suites provide additional coverage; if no replay command exists, explain that the eval suites are now the primary verification signal. Capture the full output, exit status, and any metrics each suite prints, and map any failures back to acceptance criteria or spec expectations.
 
-### Sanity checks
+### Sanity checks (fallback)
 
-Run every command listed under `### Sanity checks` regardless of other results. When these checks are the only verification tools available, highlight that verification is incomplete and follow the escalation path below.
+Commands listed under `### Sanity checks (fallback)` prove only that the project still builds/tests cleanly. Run them when:
+- you must proceed without replay/eval coverage (with explicit user consent from preflight step 7), or
+- the config describes them as additional gates to run regardless.
+
+Note clearly that these checks do not exercise the failure-mode cohort. Record their outputs alongside the targeted replay/eval results.
 
 ### Evaluate results
 
@@ -164,12 +161,11 @@ Run every command listed under `### Sanity checks` regardless of other results. 
 
 **Fail:** acceptance criteria not met, or model consistently reproducing the original failure.
 
-### Incomplete verification (only sanity checks ran)
+### Incomplete verification (sanity checks only)
 
-If neither a targeted trace replay nor any eval suites could be executed and the user chose to proceed with sanity checks only:
-- Record that verification relied solely on sanity checks.
-- Represent this in `tracebound/<agent_name>/failure_modes.json` as `status = "verifying"` with a note in the failure mode description that live verification is still pending.
-- Print clearly: "Sanity checks passed but the fix has not been exercised against the failure-mode cohort. Add a `### Targeted trace replay` command under `## Verify the fix` in `tracebound/<agent_name>/tracebound.config.md` (and any eval suites), then re-run this skill or `verify-failure-mode` to complete verification."
+If no targeted trace replay or eval suite could be run (because the config lacked them and the user explicitly approved proceeding with sanity checks only), record that live verification is incomplete:
+- Leave `status = "verifying"` in `tracebound/<agent_name>/failure_modes.json` and add a short note summarizing which verification commands are still missing.
+- Print clearly: "Sanity checks passed but the fix has not been replayed against the failure mode. Add targeted replay or eval instructions under `## Verify the fix` (including a `### Targeted trace replay` command) and re-run this skill or `verify-failure-mode` to complete verification."
 - Stop. Do not set status to `verified`.
 
 ### Update status
@@ -208,7 +204,7 @@ Print:
 - **Sanity checks must pass at every step.** Don't move to the next acceptance criterion while a check is failing.
 - **Honor all hard rules from `tracebound/<agent_name>/tracebound.config.md`.** Quote them at the start of the transcript. Stop and ask if a rule blocks a necessary change.
 - **One agent per invocation.** Never read or write under `tracebound/<other-agent>/`. The agent name scopes every Tracebound-side read and write this skill performs.
-- **Escalate when only sanity checks exist.** The "y/n" gate in preflight step 7 is mandatory — never silently proceed when the config lacks both a targeted replay command and eval suites.
+- **Ask before proceeding when only sanity checks are available.** The confirm/cancel gate in preflight step 7 is mandatory — never silently proceed when the config lacks targeted replay and eval coverage.
 - **Write `failure_modes.json` and run `tracebound validate --agent <agent_name>` after every status change.** Self-correct if it fails.
 - **Use `jq` / `jq -c` for shell-level JSON.** Never `grep`/`sed`/`awk` against JSON.
 - **One failure mode per invocation.** The approval loop is per-FM.
@@ -221,7 +217,7 @@ After this skill completes successfully:
 
 - All acceptance criteria in `SPEC.md` are satisfied.
 - All project sanity checks pass.
-- `tracebound/<agent_name>/failure_modes.json` has `status = "verified"` (or `"verifying"` if live model tests were skipped with user consent).
+- `tracebound/<agent_name>/failure_modes.json` has `status = "verified"` when targeted replay and/or eval suites passed, or remains `"verifying"` if only sanity checks were run with user consent.
 - `npx tracebound validate --agent <agent_name>` passes.
 - No file under `tracebound/<other-agent>/` has been read or written.
 - No commits, pushes, or PRs have been made.

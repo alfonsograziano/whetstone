@@ -25,31 +25,28 @@ Add or remove adapters under `adapters/`. The `ingest-traces` skill calls these.
 ## Verify the fix
 
 <!--
-### Targeted trace replay
-Command: `npm run agent:replay -- --failure-mode <id>`
+Document every way to prove the failure is fixed. List each command under the subsection that matches the verification mode it exercises.
 
-This command must:
-- Consume the failure-mode cohort `input` values (for example via `--failure-mode <id>` or a JSONL file exported from `failure_modes.json`).
+### Targeted trace replay
+Command: `npm run agent:replay -- --failure-mode <id>` (or the equivalent described for this project)
+- Consume the failure-mode cohort `input` values (via `--failure-mode <id>`, a JSONL cohort file, or another mechanism recorded here).
 - Invoke the agent on every captured input and emit a structured pass/fail outcome for each replayed trace.
 - Exit 0 when all traces replay successfully and non-zero when the replay cannot run to completion.
-
-If this subsection is absent or the `Command:` line is missing, `implement-failure-mode` will warn and fall back to the Eval suites or Sanity checks documented below.
+If this subsection is absent or lacks a `Command:` line, `implement-failure-mode` will warn and fall back to the Eval suites or Sanity checks recorded below.
 
 ### Eval suites
-- `npm run agent:eval -- --scenario <name>` — runs a named scenario from `evals/scenarios/*.yaml`
-- `npm run prompt:diff` — prints diff between deployed prompt and working tree
-
+- `npm run agent:eval -- --suite regression` — describe what the suite covers and how to interpret failures.
+- `npm run prompt:diff` — prints diff between deployed prompt and working tree.
 List every regression suite or scenario runner that should execute after a targeted replay succeeds. Include any flags required to scope the run to this failure mode.
 
-### Sanity checks
+### Sanity checks (fallback)
 - `npm run typecheck`
 - `npm run lint`
 - `npm test -- --run`
-
-Document quick-running commands teams must execute when no higher-fidelity verification mode is available. `implement-failure-mode` will surface a warning if only these checks are present.
+Document quick-running commands teams must execute when no higher-fidelity verification mode is available. If no eval suite or targeted replay is available, call it out explicitly so `implement-failure-mode` can warn and confirm before relying on these alone.
 -->
 
-## Harden the fix (optional)
+## Optional hardening (golden datasets & scorers)
 
 <!--
 - Golden dataset path: `evals/golden/`. New entries land as JSONL files named after the failure mode.
