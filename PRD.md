@@ -383,11 +383,6 @@ Suggested sections (note the unified verification block):
 - Langfuse: env LANGFUSE_HOST, LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY
 - Pull window: last 24h, page size 100
 
-## Sanity checks (run before any code change is committed)
-- `npm run typecheck`
-- `npm run lint`
-- `npm test -- --run`
-
 ## Verify the fix
 ### Targeted trace replay
 Command: `npm run agent:replay -- --failure-mode fm_2026_04_hallucinated_action`
