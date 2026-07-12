@@ -74,7 +74,7 @@ Edit `tracebound/support-bot/tracebound.config.md`. At minimum fill in:
 
 - **Agent under test** — repo root, entry point, framework.
 - **Sanity checks** — `npm run typecheck`, `npm run lint`, `npm test`, or whatever your project uses.
-- **Model test command** — a CLI that accepts `--input "<message>"` and invokes your live agent. Used by `implement-failure-mode` to verify fixes.
+- **Verify the fix** — spell out the verification modes contributors can run: eval suites, targeted trace replays that consume the failure-mode trace `input`, and sanity-check fallbacks.
 - **Hard rules** — constraints the coding agent must never violate (e.g. "never edit `src/payments/**` without human review").
 
 ### 3. Import traces

@@ -143,7 +143,7 @@ flowchart TB
 
 ### 5.5 Verify fix
 
-- Each failure mode carries a `tests[]` array (§7.2). Each test is a CLI invocation defined by the user in the Markdown config (e.g. `npm run agent:eval -- --scenario customer-refund-flow`).
+- Each failure mode carries a `tests[]` array (§7.2). The commands originate from the config's `## Verify the fix` section — eval suites, targeted trace replays (consuming the failure mode's `input` file), and sanity-check fallbacks (e.g. `npm run agent:eval -- --scenario customer-refund-flow`).
 - The verifier runs the tests against the *patched* agent and against the original cohort of failing traces (replayed via a user-provided replay command).
 - Pass + cohort failure-rate below `metrics.target` ⇒ status moves to `verified`. Regression on a previously-verified failure mode ⇒ status flips to `regressed` and on-call is notified.
 
@@ -388,12 +388,19 @@ Suggested sections:
 - `npm run lint`
 - `npm test -- --run`
 
-## Eval / scenario tools (the agent may invoke these freely)
-- `npm run agent:eval -- --scenario <name>` — runs a named scenario from `evals/scenarios/*.yaml`
-- `npm run agent:replay -- --trace-ids <file>` — replays a list of trace IDs against the current agent build, emits pass/fail per trace
-- `npm run prompt:diff` — prints diff between deployed prompt and working tree
+## Verify the fix
+### Eval suites
+- `npm run agent:eval -- --scenario refund-regression` — covers the high-volume refunds flow end-to-end.
 
-## Golden datasets & scorers (used by the optional `harden` skill)
+### Targeted trace replays
+- Command: `npm run agent:replay -- --input tracebound/support-bot/failure_modes/fm_2026_04_hallucinated_action/cohort.jsonl` — consumes the failure mode's `input` file produced by `research-failure-mode`.
+
+### Sanity checks
+- `npm run typecheck`
+- `npm run lint`
+- `npm test`
+
+## Harden the fix (optional)
 - Golden dataset path: `evals/golden/`. New entries land as JSONL files named after the failure mode.
 - Deterministic scorer path: `evals/scorers/*.ts`. Each scorer exports a `(trace) => { pass: boolean, reason?: string }` function.
 - LLM-as-judge scorer path: `evals/scorers/*.judge.md`. Each judge is a markdown prompt + rubric; the runner injects the trace.
@@ -493,7 +500,7 @@ Each phase is a checkpoint — the user can stop, inspect, and resume.
 
 **Trigger:** the user invokes the skill from their favorite coding assistant with a failure-mode id. Refuses to run unless the failure mode is in `verified` state (you cannot harden a fix that hasn't been shown to work).
 
-**Inputs:** the failure mode + all linked traces + the agent's source tree + `tracebound.config.md` (specifically the "Golden datasets & scorers" section).
+**Inputs:** the failure mode + all linked traces + the agent's source tree + `tracebound.config.md` (specifically the "Harden the fix" section).
 
 **Behaviour:**
 
