@@ -22,37 +22,34 @@ It is read by every skill before it acts. Edit freely; commit it like any other 
 Add or remove adapters under `adapters/`. The `ingest-traces` skill calls these.
 -->
 
-## Sanity checks (run before any code change is committed)
+## Verify the fix
 
 <!--
+### Targeted trace replay
+Command: `npm run agent:replay -- --failure-mode <id>`
+
+This command must:
+- Consume the failure-mode cohort `input` values (for example via `--failure-mode <id>` or a JSONL file exported from `failure_modes.json`).
+- Invoke the agent on every captured input and emit a structured pass/fail outcome for each replayed trace.
+- Exit 0 when all traces replay successfully and non-zero when the replay cannot run to completion.
+
+If this subsection is absent or the `Command:` line is missing, `implement-failure-mode` will warn and fall back to the Eval suites or Sanity checks documented below.
+
+### Eval suites
+- `npm run agent:eval -- --scenario <name>` — runs a named scenario from `evals/scenarios/*.yaml`
+- `npm run prompt:diff` — prints diff between deployed prompt and working tree
+
+List every regression suite or scenario runner that should execute after a targeted replay succeeds. Include any flags required to scope the run to this failure mode.
+
+### Sanity checks
 - `npm run typecheck`
 - `npm run lint`
 - `npm test -- --run`
+
+Document quick-running commands teams must execute when no higher-fidelity verification mode is available. `implement-failure-mode` will surface a warning if only these checks are present.
 -->
 
-## Model test command (used by implement-failure-mode to verify fixes live)
-
-<!--
-Command: `npm run agent:invoke -- --input "<user-message>"`
-
-This command must:
-- Accept a single user input string via `--input`
-- Invoke the agent under test and print its response to stdout
-- Exit 0 on success, non-zero on invocation failure
-
-If this section is absent or has no `Command:` line, `implement-failure-mode` will ask
-whether to proceed with sanity-checks-only verification.
--->
-
-## Eval / scenario tools (the agent may invoke these freely)
-
-<!--
-- `npm run agent:eval -- --scenario <name>` — runs a named scenario from `evals/scenarios/*.yaml`
-- `npm run agent:replay -- --trace-ids <file>` — replays a list of trace IDs against the current agent build, emits pass/fail per trace
-- `npm run prompt:diff` — prints diff between deployed prompt and working tree
--->
-
-## Golden datasets & scorers (used by the optional `harden` skill)
+## Harden the fix (optional)
 
 <!--
 - Golden dataset path: `evals/golden/`. New entries land as JSONL files named after the failure mode.

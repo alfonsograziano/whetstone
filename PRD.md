@@ -369,7 +369,7 @@ Both `verified` and `hardened` are valid terminal states. `wont_fix`, `duplicate
 
 A single Markdown file the user owns. The agent reads it before *every* skill invocation. Markdown (not JSON/YAML) because (a) it's mostly prose explaining tools to an LLM, and (b) it's diffable and reviewable like any other doc.
 
-Suggested sections:
+Suggested sections (note the unified verification block):
 
 ```markdown
 # Tracebound config
@@ -383,17 +383,23 @@ Suggested sections:
 - Langfuse: env LANGFUSE_HOST, LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY
 - Pull window: last 24h, page size 100
 
-## Sanity checks (run before any code change is committed)
+## Verify the fix
+### Targeted trace replay
+Command: `npm run agent:replay -- --failure-mode fm_2026_04_hallucinated_action`
+- Consumes the failure-mode cohort `input` values (via an id flag or JSONL fixture).
+- Invokes the agent for every captured input and emits per-trace pass/fail output.
+- Exits 0 once all traces replay cleanly; non-zero if the replay cannot complete.
+
+### Eval suites
+- `npm run agent:eval -- --scenario <name>` — runs a named scenario from `evals/scenarios/*.yaml`
+- `npm run prompt:diff` — prints diff between deployed prompt and working tree
+
+### Sanity checks
 - `npm run typecheck`
 - `npm run lint`
 - `npm test -- --run`
 
-## Eval / scenario tools (the agent may invoke these freely)
-- `npm run agent:eval -- --scenario <name>` — runs a named scenario from `evals/scenarios/*.yaml`
-- `npm run agent:replay -- --trace-ids <file>` — replays a list of trace IDs against the current agent build, emits pass/fail per trace
-- `npm run prompt:diff` — prints diff between deployed prompt and working tree
-
-## Golden datasets & scorers (used by the optional `harden` skill)
+## Harden the fix (optional)
 - Golden dataset path: `evals/golden/`. New entries land as JSONL files named after the failure mode.
 - Deterministic scorer path: `evals/scorers/*.ts`. Each scorer exports a `(trace) => { pass: boolean, reason?: string }` function.
 - LLM-as-judge scorer path: `evals/scorers/*.judge.md`. Each judge is a markdown prompt + rubric; the runner injects the trace.
