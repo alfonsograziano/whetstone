@@ -22,37 +22,31 @@ It is read by every skill before it acts. Edit freely; commit it like any other 
 Add or remove adapters under `adapters/`. The `ingest-traces` skill calls these.
 -->
 
-## Sanity checks (run before any code change is committed)
+## Verify the fix
 
 <!--
+Document every way to prove the failure is fixed. List each command under the subsection that matches the verification mode it exercises.
+
+### Targeted trace replay
+Command: `npm run agent:replay -- --failure-mode <id>` (or the equivalent described for this project)
+- Consume the failure-mode cohort `input` values (via `--failure-mode <id>`, a JSONL cohort file, or another mechanism recorded here).
+- Invoke the agent on every captured input and emit a structured pass/fail outcome for each replayed trace.
+- Exit 0 when all traces replay successfully and non-zero when the replay cannot run to completion.
+If this subsection is absent or lacks a `Command:` line, `implement-failure-mode` will warn and fall back to the Eval suites or Sanity checks recorded below.
+
+### Eval suites
+- `npm run agent:eval -- --suite regression` — describe what the suite covers and how to interpret failures.
+- `npm run prompt:diff` — prints diff between deployed prompt and working tree.
+List every regression suite or scenario runner that should execute after a targeted replay succeeds. Include any flags required to scope the run to this failure mode.
+
+### Sanity checks (fallback)
 - `npm run typecheck`
 - `npm run lint`
 - `npm test -- --run`
+Document quick-running commands teams must execute when no higher-fidelity verification mode is available. If no eval suite or targeted replay is available, call it out explicitly so `implement-failure-mode` can warn and confirm before relying on these alone.
 -->
 
-## Model test command (used by implement-failure-mode to verify fixes live)
-
-<!--
-Command: `npm run agent:invoke -- --input "<user-message>"`
-
-This command must:
-- Accept a single user input string via `--input`
-- Invoke the agent under test and print its response to stdout
-- Exit 0 on success, non-zero on invocation failure
-
-If this section is absent or has no `Command:` line, `implement-failure-mode` will ask
-whether to proceed with sanity-checks-only verification.
--->
-
-## Eval / scenario tools (the agent may invoke these freely)
-
-<!--
-- `npm run agent:eval -- --scenario <name>` — runs a named scenario from `evals/scenarios/*.yaml`
-- `npm run agent:replay -- --trace-ids <file>` — replays a list of trace IDs against the current agent build, emits pass/fail per trace
-- `npm run prompt:diff` — prints diff between deployed prompt and working tree
--->
-
-## Golden datasets & scorers (used by the optional `harden` skill)
+## Optional hardening (golden datasets & scorers)
 
 <!--
 - Golden dataset path: `evals/golden/`. New entries land as JSONL files named after the failure mode.
