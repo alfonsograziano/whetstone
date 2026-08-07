@@ -33,13 +33,13 @@ Everything lives as diffable files in your repo under a `tracebound/` folder. No
 ## Installation
 
 ```bash
-npm install -g @tracebound/cli
+npm install -g @nearform/tracebound
 ```
 
 Or use without installing:
 
 ```bash
-npx @tracebound/cli <command>
+npx @nearform/tracebound <command>
 ```
 
 ---
@@ -74,7 +74,7 @@ Edit `tracebound/support-bot/tracebound.config.md`. At minimum fill in:
 
 - **Agent under test** — repo root, entry point, framework.
 - **Sanity checks** — `npm run typecheck`, `npm run lint`, `npm test`, or whatever your project uses.
-- **Model test command** — a CLI that accepts `--input "<message>"` and invokes your live agent. Used by `implement-failure-mode` to verify fixes.
+- **Verify the fix** — use the unified section to document the targeted trace replay command (consuming the failure-mode cohort `input` values), the eval suite(s) to run after replay, and the sanity-check commands to fall back on. `implement-failure-mode` reads this in priority order.
 - **Hard rules** — constraints the coding agent must never violate (e.g. "never edit `src/payments/**` without human review").
 
 ### 3. Import traces

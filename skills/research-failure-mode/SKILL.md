@@ -180,11 +180,11 @@ concrete test against each one.>
 
 ## Test plan
 
-<How the implementer should verify the fix. Reference eval/scenario/replay commands
-from tracebound.config.md where applicable. If the "Model test command" section of
-the config is set, describe what inputs to run through it and what outputs to expect.
-If no automated test covers this pattern, say so explicitly — the implementer will
-need to construct one or perform a manual replay.>
+<How the implementer should verify the fix. Reference the `## Verify the fix` section of
+tracebound.config.md: call out the targeted trace replay commands (including which cohort file or
+trace `input` to use), list the eval suites to run, and document any sanity-check fallback.
+If only sanity checks exist, say so explicitly so the implementer can warn and confirm before
+proceeding.>
 
 ## Out of scope
 

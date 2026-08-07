@@ -1,10 +1,29 @@
 {
-  "name": "@tracebound/cli",
+  "name": "@nearform/tracebound",
   "version": "0.1.0",
   "description": "Tracebound CLI: deterministic primitives for the Tracebound agent-improvement loop.",
   "type": "module",
+  "license": "MIT",
+  "author": "NearForm Ltd (https://www.nearform.com)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nearform/tracebound.git"
+  },
+  "homepage": "https://github.com/nearform/tracebound#readme",
+  "bugs": {
+    "url": "https://github.com/nearform/tracebound/issues"
+  },
+  "keywords": [
+    "cli",
+    "llm",
+    "agent",
+    "traces",
+    "observability",
+    "evals",
+    "failure-modes"
+  ],
   "bin": {
-    "tracebound": "./dist/cli.js"
+    "tracebound": "dist/cli.js"
   },
   "files": [
     "dist",
@@ -14,10 +33,15 @@
   "engines": {
     "node": ">=22.6.0"
   },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json && node scripts/postbuild.js",
     "clean": "rm -rf dist",
     "prepare": "npm run build",
+    "prepublishOnly": "npm run typecheck && npm test",
     "test": "node --test src/__tests__/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
