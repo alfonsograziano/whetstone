@@ -1,7 +1,7 @@
-import test from "node:test";
-import { strict as assert } from "node:assert";
+import test, { type TestContext } from "node:test";
 import {
   mkdtemp,
+  readdir,
   readFile,
   rm,
   stat,
@@ -16,12 +16,14 @@ import {
   DEFAULT_TARGET,
 } from "../commands/install-skills.ts";
 
-async function makeTmpDir(): Promise<string> {
-  return await mkdtemp(join(tmpdir(), "tracebound-install-skills-"));
+function makeTmpDir(t: TestContext): Promise<string> {
+  return mkdtemp(join(tmpdir(), "tracebound-install-skills-")).then((dir) => {
+    t.after(() => rm(dir, { recursive: true, force: true }));
+    return dir;
+  });
 }
 
 async function listSkillNames(root: string): Promise<string[]> {
-  const { readdir } = await import("node:fs/promises");
   const entries = await readdir(root, { withFileTypes: true });
   return entries
     .filter((e) => e.isDirectory())
@@ -29,54 +31,51 @@ async function listSkillNames(root: string): Promise<string[]> {
     .sort();
 }
 
-test("bundledSkillsDir resolves to the repo's skills/ directory", async () => {
+test("bundledSkillsDir resolves to the repo's skills/ directory", async (t: TestContext) => {
   const dir = bundledSkillsDir();
   const s = await stat(dir);
-  assert.equal(s.isDirectory(), true);
+  t.assert.strictEqual(s.isDirectory(), true);
   const names = await listSkillNames(dir);
-  assert.ok(names.includes("analyze-traces"));
-  assert.ok(names.includes("create-adapter"));
-  assert.ok(names.includes("research-failure-mode"));
-  assert.ok(names.includes("implement-failure-mode"));
+  t.assert.ok(names.includes("analyze-traces"));
+  t.assert.ok(names.includes("create-adapter"));
+  t.assert.ok(names.includes("research-failure-mode"));
+  t.assert.ok(names.includes("implement-failure-mode"));
 });
 
-test("runInstallSkills copies every bundled skill into the default target on a clean directory", async (t) => {
-  const cwd = await makeTmpDir();
-  t.after(() => rm(cwd, { recursive: true, force: true }));
+test("runInstallSkills copies every bundled skill into the default target on a clean directory", async (t: TestContext) => {
+  const cwd = await makeTmpDir(t);
 
   const bundled = await listSkillNames(bundledSkillsDir());
   const result = await runInstallSkills({ cwd });
 
-  assert.equal(result.selfInstallSkipped, false);
-  assert.equal(result.dryRun, false);
-  assert.equal(result.targetDir, join(cwd, DEFAULT_TARGET));
-  assert.deepEqual(result.installed, bundled);
-  assert.deepEqual(result.upToDate, []);
-  assert.deepEqual(result.skipped, []);
+  t.assert.strictEqual(result.selfInstallSkipped, false);
+  t.assert.strictEqual(result.dryRun, false);
+  t.assert.strictEqual(result.targetDir, join(cwd, DEFAULT_TARGET));
+  t.assert.deepStrictEqual(result.installed, bundled);
+  t.assert.deepStrictEqual(result.upToDate, []);
+  t.assert.deepStrictEqual(result.skipped, []);
 
   for (const skill of bundled) {
     const targetPath = join(result.targetDir, skill, "SKILL.md");
     const s = await stat(targetPath);
-    assert.equal(s.isFile(), true);
+    t.assert.strictEqual(s.isFile(), true);
   }
 });
 
-test("runInstallSkills is idempotent: a second run reports every skill as up-to-date", async (t) => {
-  const cwd = await makeTmpDir();
-  t.after(() => rm(cwd, { recursive: true, force: true }));
+test("runInstallSkills is idempotent: a second run reports every skill as up-to-date", async (t: TestContext) => {
+  const cwd = await makeTmpDir(t);
 
   const first = await runInstallSkills({ cwd });
-  assert.ok(first.installed.length > 0);
+  t.assert.ok(first.installed.length > 0);
 
   const second = await runInstallSkills({ cwd });
-  assert.deepEqual(second.installed, []);
-  assert.deepEqual(second.upToDate.sort(), first.installed.slice().sort());
-  assert.deepEqual(second.skipped, []);
+  t.assert.deepStrictEqual(second.installed, []);
+  t.assert.deepStrictEqual(second.upToDate.sort(), first.installed.slice().sort());
+  t.assert.deepStrictEqual(second.skipped, []);
 });
 
-test("runInstallSkills leaves user-edited skills untouched by default", async (t) => {
-  const cwd = await makeTmpDir();
-  t.after(() => rm(cwd, { recursive: true, force: true }));
+test("runInstallSkills leaves user-edited skills untouched by default", async (t: TestContext) => {
+  const cwd = await makeTmpDir(t);
 
   const first = await runInstallSkills({ cwd });
   const bundled = first.installed.slice().sort();
@@ -87,20 +86,19 @@ test("runInstallSkills leaves user-edited skills untouched by default", async (t
   await writeFile(targetPath, userContent, "utf8");
 
   const result = await runInstallSkills({ cwd });
-  assert.deepEqual(result.installed, []);
-  assert.deepEqual(
+  t.assert.deepStrictEqual(result.installed, []);
+  t.assert.deepStrictEqual(
     result.upToDate.slice().sort(),
     bundled.filter((s) => s !== skill),
   );
-  assert.deepEqual(result.skipped, [skill]);
+  t.assert.deepStrictEqual(result.skipped, [skill]);
 
   const after = await readFile(targetPath, "utf8");
-  assert.equal(after, userContent);
+  t.assert.strictEqual(after, userContent);
 });
 
-test("runInstallSkills --force overwrites user-edited skills", async (t) => {
-  const cwd = await makeTmpDir();
-  t.after(() => rm(cwd, { recursive: true, force: true }));
+test("runInstallSkills --force overwrites user-edited skills", async (t: TestContext) => {
+  const cwd = await makeTmpDir(t);
 
   await runInstallSkills({ cwd });
 
@@ -110,51 +108,48 @@ test("runInstallSkills --force overwrites user-edited skills", async (t) => {
   await writeFile(targetPath, userContent, "utf8");
 
   const result = await runInstallSkills({ cwd, force: true });
-  assert.ok(result.installed.includes(skill));
-  assert.equal(result.skipped.length, 0);
+  t.assert.ok(result.installed.includes(skill));
+  t.assert.strictEqual(result.skipped.length, 0);
 
   const bundledRaw = await readFile(
     join(bundledSkillsDir(), skill, "SKILL.md"),
     "utf8",
   );
   const after = await readFile(targetPath, "utf8");
-  assert.equal(after, bundledRaw);
+  t.assert.strictEqual(after, bundledRaw);
 });
 
-test("runInstallSkills --dry-run writes nothing", async (t) => {
-  const cwd = await makeTmpDir();
-  t.after(() => rm(cwd, { recursive: true, force: true }));
+test("runInstallSkills --dry-run writes nothing", async (t: TestContext) => {
+  const cwd = await makeTmpDir(t);
 
   const bundled = await listSkillNames(bundledSkillsDir());
   const result = await runInstallSkills({ cwd, dryRun: true });
 
-  assert.equal(result.dryRun, true);
-  assert.deepEqual(result.installed, bundled);
-  assert.equal(result.upToDate.length, 0);
+  t.assert.strictEqual(result.dryRun, true);
+  t.assert.deepStrictEqual(result.installed, bundled);
+  t.assert.strictEqual(result.upToDate.length, 0);
 
-  await assert.rejects(
+  await t.assert.rejects(
     () => stat(join(result.targetDir, "analyze-traces", "SKILL.md")),
     /ENOENT/,
   );
 });
 
-test("runInstallSkills honours --target for a custom install location", async (t) => {
-  const cwd = await makeTmpDir();
-  t.after(() => rm(cwd, { recursive: true, force: true }));
+test("runInstallSkills honours --target for a custom install location", async (t: TestContext) => {
+  const cwd = await makeTmpDir(t);
 
   const result = await runInstallSkills({
     cwd,
     target: "my/custom/skills",
   });
 
-  assert.equal(result.targetDir, join(cwd, "my", "custom", "skills"));
+  t.assert.strictEqual(result.targetDir, join(cwd, "my", "custom", "skills"));
   const s = await stat(join(result.targetDir, "analyze-traces", "SKILL.md"));
-  assert.equal(s.isFile(), true);
+  t.assert.strictEqual(s.isFile(), true);
 });
 
-test("runInstallSkills skips silently when --cwd is the tracebound package itself", async (t) => {
-  const cwd = await makeTmpDir();
-  t.after(() => rm(cwd, { recursive: true, force: true }));
+test("runInstallSkills skips silently when --cwd is the tracebound package itself", async (t: TestContext) => {
+  const cwd = await makeTmpDir(t);
 
   await writeFile(
     join(cwd, "package.json"),
@@ -163,44 +158,42 @@ test("runInstallSkills skips silently when --cwd is the tracebound package itsel
   );
 
   const result = await runInstallSkills({ cwd });
-  assert.equal(result.selfInstallSkipped, true);
-  assert.equal(result.installed.length, 0);
-  await assert.rejects(
+  t.assert.strictEqual(result.selfInstallSkipped, true);
+  t.assert.strictEqual(result.installed.length, 0);
+  await t.assert.rejects(
     () => stat(join(cwd, ".claude")),
     /ENOENT/,
   );
 });
 
-test("runInstallSkills rejects --cwd that does not exist", async () => {
+test("runInstallSkills rejects --cwd that does not exist", async (t: TestContext) => {
   const missing = join(
     tmpdir(),
     `tracebound-missing-${process.pid}-${Date.now()}`,
   );
-  await assert.rejects(
+  await t.assert.rejects(
     () => runInstallSkills({ cwd: missing }),
     /does not exist/,
   );
 });
 
-test("runInstallSkills rejects --cwd that is a file, not a directory", async (t) => {
-  const cwd = await makeTmpDir();
-  t.after(() => rm(cwd, { recursive: true, force: true }));
+test("runInstallSkills rejects --cwd that is a file, not a directory", async (t: TestContext) => {
+  const cwd = await makeTmpDir(t);
   const filePath = join(cwd, "not-a-dir");
   await writeFile(filePath, "x", "utf8");
 
-  await assert.rejects(
+  await t.assert.rejects(
     () => runInstallSkills({ cwd: filePath }),
     /not a directory/,
   );
 });
 
-test("runInstallSkills rejects --cwd whose package.json is malformed JSON", async (t) => {
-  const cwd = await makeTmpDir();
-  t.after(() => rm(cwd, { recursive: true, force: true }));
+test("runInstallSkills rejects --cwd whose package.json is malformed JSON", async (t: TestContext) => {
+  const cwd = await makeTmpDir(t);
 
   await writeFile(join(cwd, "package.json"), "{ not valid json", "utf8");
 
-  await assert.rejects(
+  await t.assert.rejects(
     () => runInstallSkills({ cwd }),
     /malformed JSON in .*package\.json/,
   );
