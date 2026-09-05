@@ -193,3 +193,15 @@ test("runInstallSkills rejects --cwd that is a file, not a directory", async (t)
     /not a directory/,
   );
 });
+
+test("runInstallSkills rejects --cwd whose package.json is malformed JSON", async (t) => {
+  const cwd = await makeTmpDir();
+  t.after(() => rm(cwd, { recursive: true, force: true }));
+
+  await writeFile(join(cwd, "package.json"), "{ not valid json", "utf8");
+
+  await assert.rejects(
+    () => runInstallSkills({ cwd }),
+    /malformed JSON in .*package\.json/,
+  );
+});

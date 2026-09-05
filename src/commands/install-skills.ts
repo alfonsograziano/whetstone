@@ -11,29 +11,17 @@ export interface InstallSkillsOptions {
 }
 
 export interface InstallSkillsResult {
-  /** Absolute path to the resolved cwd. */
   cwdAbsolute: string;
-  /** Absolute path to the directory skills were copied into. */
   targetDir: string;
-  /** Skill names copied (or that would be copied in dry-run). */
   installed: string[];
-  /** Skill names that already match the bundled content. */
   upToDate: string[];
-  /** Skill names that exist locally with different content and were left untouched. */
   skipped: string[];
-  /** True when no write was performed because of --dry-run. */
   dryRun: boolean;
-  /** True when install was skipped because cwd is the tracebound package itself. */
   selfInstallSkipped: boolean;
 }
 
 export const DEFAULT_TARGET = ".claude/skills/tracebound";
 
-/**
- * Absolute path to the directory holding the bundled skills in the installed
- * package. Resolves `<package-root>/skills` regardless of whether this file is
- * running from `src/commands/` (source/tests) or `dist/commands/` (built CLI).
- */
 export function bundledSkillsDir(): string {
   return resolve(import.meta.dirname, "..", "..", "skills");
 }
@@ -46,14 +34,21 @@ function listSkillNames(root: string): string[] {
 }
 
 function isOwnPackageDir(cwdAbsolute: string): boolean {
+  const pkgPath = join(cwdAbsolute, "package.json");
+  let raw: string;
   try {
-    const pkg = JSON.parse(
-      readFileSync(join(cwdAbsolute, "package.json"), "utf8"),
-    ) as { name?: unknown };
-    return pkg.name === "@nearform/tracebound";
-  } catch {
-    return false;
+    raw = readFileSync(pkgPath, "utf8");
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw new Error(`could not read ${pkgPath}`, { cause: err });
   }
+  let pkg: { name?: unknown };
+  try {
+    pkg = JSON.parse(raw) as { name?: unknown };
+  } catch (err) {
+    throw new Error(`malformed JSON in ${pkgPath}`, { cause: err });
+  }
+  return pkg.name === "@nearform/tracebound";
 }
 
 export async function runInstallSkills(
@@ -68,7 +63,9 @@ export async function runInstallSkills(
     if ((err as NodeJS.ErrnoException).code === "ENOENT") {
       throw new Error(`--cwd path does not exist: ${cwdAbsolute}`);
     }
-    throw err;
+    throw new Error(`could not stat --cwd path: ${cwdAbsolute}`, {
+      cause: err,
+    });
   }
   if (!cwdStat.isDirectory()) {
     throw new Error(`--cwd path is not a directory: ${cwdAbsolute}`);
