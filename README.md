@@ -42,6 +42,20 @@ Or use without installing:
 npx @nearform/tracebound <command>
 ```
 
+After installing, run this inside the project that contains your agent to copy
+the bundled skills (`analyze-traces`, `create-adapter`, `research-failure-mode`,
+`implement-failure-mode`) into that project's skills directory:
+
+```bash
+tracebound install-skills
+```
+
+By default, the command writes to `.claude/skills/tracebound/`. It is idempotent
+— re-running it reports already-installed skills as up-to-date and never
+overwrites a skill you have edited locally unless you pass `--force`. The CLI
+also runs `install-skills` from its `postinstall` hook as a best-effort default
+when your `cwd` at install time is the target project.
+
 ---
 
 ## Quick start
@@ -156,6 +170,7 @@ Commands:
   status               Print catalogue health for one agent.
   trace get <id>       Find a trace by id within one agent.
   fm get <id>          Print a failure mode by id within one agent.
+  install-skills       Copy bundled skills into the local project's skills directory.
 
 Global options:
   -h, --help           Show this help.
@@ -258,6 +273,27 @@ Options:
 Exit codes:
   0   found
   1   not found
+  2   could not run
+```
+
+### `tracebound install-skills`
+
+Copies every skill bundled with the CLI into the local project's skills
+directory. By default the target is `.claude/skills/tracebound/`. Skills that
+already exist locally with the same content are reported as up-to-date; skills
+you have edited locally are NOT overwritten unless `--force` is passed. When
+the CLI is installed in environments that disable `postinstall` (or when you
+upgrade), re-run this command to refresh the local copy.
+
+```
+Options:
+  -C, --cwd <path>     Directory to install skills into (default: cwd)
+  -t, --target <dir>   Subdirectory under --cwd (default: .claude/skills/tracebound)
+  -f, --force          Overwrite locally-modified skills
+      --dry-run        Print what would change, do not write
+
+Exit codes:
+  0   success (installed, up-to-date, or self-install skipped)
   2   could not run
 ```
 
