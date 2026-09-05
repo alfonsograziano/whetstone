@@ -12,4 +12,10 @@ const result = spawnSync(
   { stdio: "inherit" },
 );
 
-process.exit(result.status ?? 0);
+if (result.signal !== null) {
+  process.stderr.write(
+    `install-skills child terminated by signal ${result.signal}\n`,
+  );
+}
+
+process.exit(result.status ?? 1);

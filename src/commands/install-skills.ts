@@ -1,4 +1,11 @@
-import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  readdir,
+  readFile,
+  realpath,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { dirname, join, resolve, sep } from "node:path";
 import { styleText } from "node:util";
 
@@ -112,8 +119,9 @@ export async function runInstallSkills(
     );
   }
 
-  const targetDir = resolve(cwdAbsolute, options.target ?? DEFAULT_TARGET);
-  if (targetDir !== cwdAbsolute && !targetDir.startsWith(cwdAbsolute + sep)) {
+  const cwdReal = await realpath(cwdAbsolute);
+  const targetDir = resolve(cwdReal, options.target ?? DEFAULT_TARGET);
+  if (targetDir !== cwdReal && !targetDir.startsWith(cwdReal + sep)) {
     throw new Error(
       `--target must resolve inside --cwd: ${targetDir} is outside ${cwdAbsolute}`,
     );

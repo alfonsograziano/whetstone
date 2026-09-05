@@ -5,6 +5,7 @@ import {
   readFile,
   rm,
   stat,
+  symlink,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -213,5 +214,22 @@ test("runInstallSkills rejects --target that resolves outside --cwd", async (t: 
 test("runInstallSkills accepts --target equal to --cwd", async (t: TestContext) => {
   const cwd = await makeTmpDir(t);
   const result = await runInstallSkills({ cwd, target: "." });
-  t.assert.strictEqual(result.targetDir, cwd);
+  // targetDir is resolved against the realpath of cwd to prevent symlink-bypass.
+  // On filesystems where the tmp path contains symlinks (e.g. macOS /tmp -> /private/tmp),
+  // the realpath differs from the original cwd.
+  const { realpath } = await import("node:fs/promises");
+  const cwdReal = await realpath(cwd);
+  t.assert.strictEqual(result.targetDir, cwdReal);
+});
+
+test("runInstallSkills resolves --cwd symlinks before checking target containment", async (t: TestContext) => {
+  const realDir = await makeTmpDir(t);
+  const linkParent = await makeTmpDir(t);
+  const linkPath = join(linkParent, "link");
+  await symlink(realDir, linkPath);
+
+  // --target that would be outside realDir if symlink resolution were skipped,
+  // but is inside it after realpath resolves the link.
+  const result = await runInstallSkills({ cwd: linkPath });
+  t.assert.ok(result.targetDir.startsWith(realDir));
 });
