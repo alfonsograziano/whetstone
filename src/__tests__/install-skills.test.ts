@@ -16,11 +16,10 @@ import {
   DEFAULT_TARGET,
 } from "../commands/install-skills.ts";
 
-function makeTmpDir(t: TestContext): Promise<string> {
-  return mkdtemp(join(tmpdir(), "tracebound-install-skills-")).then((dir) => {
-    t.after(() => rm(dir, { recursive: true, force: true }));
-    return dir;
-  });
+async function makeTmpDir(t: TestContext): Promise<string> {
+  const dir = await mkdtemp(join(tmpdir(), "tracebound-install-skills-"));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  return dir;
 }
 
 async function listSkillNames(root: string): Promise<string[]> {
