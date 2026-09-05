@@ -233,3 +233,17 @@ test("runInstallSkills resolves --cwd symlinks before checking target containmen
   const result = await runInstallSkills({ cwd: linkPath });
   t.assert.ok(result.targetDir.startsWith(realDir));
 });
+
+test("runInstallSkills rejects an intermediate --target symlink that escapes --cwd", async (t: TestContext) => {
+  const outside = await makeTmpDir(t);
+  const project = await makeTmpDir(t);
+  // Symlink inside the project that points outside it. The default target
+  // path is .claude/skills/tracebound; we make .claude a symlink to `outside`
+  // so the realpath of the resolved target lands outside project.
+  await symlink(outside, join(project, ".claude"));
+
+  await t.assert.rejects(
+    () => runInstallSkills({ cwd: project }),
+    /--target resolved through a symlink that escapes --cwd/,
+  );
+});

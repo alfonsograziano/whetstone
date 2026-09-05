@@ -128,6 +128,12 @@ export async function runInstallSkills(
   }
   if (!dryRun) {
     await mkdir(targetDir, { recursive: true });
+    const targetReal = await realpath(targetDir);
+    if (targetReal !== cwdReal && !targetReal.startsWith(cwdReal + sep)) {
+      throw new Error(
+        `--target resolved through a symlink that escapes --cwd: ${targetDir} -> ${targetReal}`,
+      );
+    }
   }
 
   const result: InstallSkillsResult = {
