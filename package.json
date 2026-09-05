@@ -27,6 +27,7 @@
   },
   "files": [
     "dist",
+    "skills",
     "templates",
     "README.md"
   ],
@@ -40,6 +41,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json && node scripts/postbuild.js",
     "clean": "rm -rf dist",
+    "install-skills": "node ./dist/cli.js install-skills --cwd .",
+    "postinstall": "node ./dist/cli.js install-skills --cwd . || exit 0",
     "prepare": "npm run build",
     "prepublishOnly": "npm run typecheck && npm test",
     "test": "node --test src/__tests__/*.test.ts",
