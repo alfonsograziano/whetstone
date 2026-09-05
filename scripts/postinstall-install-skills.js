@@ -12,6 +12,12 @@ const result = spawnSync(
   { stdio: "inherit" },
 );
 
+if (result.error) {
+  process.stderr.write(
+    `install-skills failed to start: ${result.error.message}\n`,
+  );
+}
+
 if (result.signal !== null) {
   process.stderr.write(
     `install-skills child terminated by signal ${result.signal}\n`,
