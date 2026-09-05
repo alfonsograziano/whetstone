@@ -31,6 +31,7 @@ import {
 import {
   reportText as installSkillsReportText,
   runInstallSkills,
+  DEFAULT_TARGET as INSTALL_SKILLS_DEFAULT_TARGET,
 } from "./commands/install-skills.ts";
 
 const USAGE = `tracebound — deterministic primitives for the Tracebound agent-improvement loop.
@@ -200,7 +201,7 @@ Options:
   -C, --cwd <path>     Directory to install skills into (default: process.cwd()).
                        Must exist and be a directory.
   -t, --target <dir>   Subdirectory under --cwd to install skills into.
-                       Default: .claude/skills/tracebound
+                       Default: ${INSTALL_SKILLS_DEFAULT_TARGET}
   -f, --force          Overwrite skills whose local copy differs from the bundled copy.
       --dry-run        Print what would change, do not write.
   -h, --help           Show this help.
