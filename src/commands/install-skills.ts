@@ -1,5 +1,5 @@
 import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
 import { styleText } from "node:util";
 
 export interface InstallSkillsOptions {
@@ -113,6 +113,11 @@ export async function runInstallSkills(
   }
 
   const targetDir = resolve(cwdAbsolute, options.target ?? DEFAULT_TARGET);
+  if (targetDir !== cwdAbsolute && !targetDir.startsWith(cwdAbsolute + sep)) {
+    throw new Error(
+      `--target must resolve inside --cwd: ${targetDir} is outside ${cwdAbsolute}`,
+    );
+  }
   if (!dryRun) {
     await mkdir(targetDir, { recursive: true });
   }

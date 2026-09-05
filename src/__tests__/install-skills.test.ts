@@ -197,3 +197,21 @@ test("runInstallSkills rejects --cwd whose package.json is malformed JSON", asyn
     /malformed JSON in .*package\.json/,
   );
 });
+
+test("runInstallSkills rejects --target that resolves outside --cwd", async (t: TestContext) => {
+  const cwd = await makeTmpDir(t);
+  await t.assert.rejects(
+    () => runInstallSkills({ cwd, target: "../escape" }),
+    /--target must resolve inside --cwd/,
+  );
+  await t.assert.rejects(
+    () => runInstallSkills({ cwd, target: "/etc" }),
+    /--target must resolve inside --cwd/,
+  );
+});
+
+test("runInstallSkills accepts --target equal to --cwd", async (t: TestContext) => {
+  const cwd = await makeTmpDir(t);
+  const result = await runInstallSkills({ cwd, target: "." });
+  t.assert.strictEqual(result.targetDir, cwd);
+});
