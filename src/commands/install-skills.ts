@@ -1,5 +1,4 @@
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { styleText } from "node:util";
 
@@ -26,18 +25,19 @@ export function bundledSkillsDir(): string {
   return resolve(import.meta.dirname, "..", "..", "skills");
 }
 
-function listSkillNames(root: string): string[] {
-  return readdirSync(root, { withFileTypes: true })
+async function listSkillNames(root: string): Promise<string[]> {
+  const entries = await readdir(root, { withFileTypes: true });
+  return entries
     .filter((e) => e.isDirectory())
     .map((e) => e.name)
     .sort();
 }
 
-function isOwnPackageDir(cwdAbsolute: string): boolean {
+async function isOwnPackageDir(cwdAbsolute: string): Promise<boolean> {
   const pkgPath = join(cwdAbsolute, "package.json");
   let raw: string;
   try {
-    raw = readFileSync(pkgPath, "utf8");
+    raw = await readFile(pkgPath, "utf8");
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") return false;
     throw new Error(`could not read ${pkgPath}`, { cause: err });
@@ -51,6 +51,15 @@ function isOwnPackageDir(cwdAbsolute: string): boolean {
   return pkg.name === "@nearform/tracebound";
 }
 
+async function readIfExists(path: string): Promise<string | undefined> {
+  try {
+    return await readFile(path, "utf8");
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw new Error(`could not read ${path}`, { cause: err });
+  }
+}
+
 export async function runInstallSkills(
   options: InstallSkillsOptions = {},
 ): Promise<InstallSkillsResult> {
@@ -58,7 +67,7 @@ export async function runInstallSkills(
 
   let cwdStat;
   try {
-    cwdStat = statSync(cwdAbsolute);
+    cwdStat = await stat(cwdAbsolute);
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") {
       throw new Error(`--cwd path does not exist: ${cwdAbsolute}`);
@@ -73,7 +82,7 @@ export async function runInstallSkills(
 
   const dryRun = options.dryRun ?? false;
 
-  if (isOwnPackageDir(cwdAbsolute)) {
+  if (await isOwnPackageDir(cwdAbsolute)) {
     return {
       cwdAbsolute,
       targetDir: "",
@@ -86,9 +95,20 @@ export async function runInstallSkills(
   }
 
   const bundledDir = bundledSkillsDir();
-  if (!existsSync(bundledDir)) {
+  let bundledStat;
+  try {
+    bundledStat = await stat(bundledDir);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+      throw new Error(
+        `bundled skills directory not found: ${bundledDir}. This CLI install is missing the 'skills/' directory.`,
+      );
+    }
+    throw err;
+  }
+  if (!bundledStat.isDirectory()) {
     throw new Error(
-      `bundled skills directory not found: ${bundledDir}. This CLI install is missing the 'skills/' directory.`,
+      `bundled skills path is not a directory: ${bundledDir}. This CLI install is corrupted.`,
     );
   }
 
@@ -107,16 +127,16 @@ export async function runInstallSkills(
     selfInstallSkipped: false,
   };
 
-  for (const skill of listSkillNames(bundledDir)) {
+  for (const skill of await listSkillNames(bundledDir)) {
     const sourcePath = join(bundledDir, skill, "SKILL.md");
     const targetPath = join(targetDir, skill, "SKILL.md");
 
-    if (!existsSync(sourcePath)) continue;
+    const sourceContents = await readIfExists(sourcePath);
+    if (sourceContents === undefined) continue;
 
-    const sourceContents = readFileSync(sourcePath, "utf8");
-    const targetExists = existsSync(targetPath);
+    const targetContents = await readIfExists(targetPath);
 
-    if (!targetExists) {
+    if (targetContents === undefined) {
       if (!dryRun) {
         await mkdir(dirname(targetPath), { recursive: true });
         await writeFile(targetPath, sourceContents, "utf8");
@@ -125,7 +145,6 @@ export async function runInstallSkills(
       continue;
     }
 
-    const targetContents = readFileSync(targetPath, "utf8");
     if (targetContents === sourceContents) {
       result.upToDate.push(skill);
       continue;
